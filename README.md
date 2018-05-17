@@ -39,7 +39,7 @@ It is useful in **two basic scenarios**:
   * **macOs, Linux** (PowerShell Core): 
     * `$HOME/.local/share/powershell/Modules`
 
-As long as you've cloned into one of the directories listed in the `$env:PSModulePath` variable - copying to some of which requires elevation / `sudo` - and as long your `$PSModuleAutoLoadingPreference` is not set (the default) or set to `All`, calling `Set-ClipboardText` or `Get-ClipboardText` should import the module on demand.
+As long as you've cloned into one of the directories listed in the `$env:PSModulePath` variable - copying to some of which requires elevation / `sudo` - and as long your `$PSModuleAutoLoadingPreference` is not set (the default) or set to `All`, calling `Set-ClipboardText` or `Get-ClipboardText` should import the module on demand - except in _PowerShell v2_.
 
 To explicitly impot the module, run `Import-Module <path/to/module-folder>`.
 
@@ -54,7 +54,13 @@ Set-Location $(if ($env:OS -eq 'Windows_NT') { "$HOME\Documents\{0}\Modules" -f 
 git clone --depth 1 --quiet https://github.com/mklement0/ClipboardText
 ```
 
-Run `Set-ClipboardText -?` to verify that installation succeeded and that the module is loaded on demand:
+On _Windows PowerShell v2_, you must now explicitly load the module:
+
+```powershell
+Import-Module -Verbose .\ClipboardText
+```
+
+Run `Set-ClipboardText -?` to verify that installation succeeded and that the module is loaded on demand (PSv3+):
 you should see brief CLI help text.
 
 # Usage

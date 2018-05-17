@@ -14,12 +14,12 @@ for **copying text to and retrieving text from the system clipboard**, via the `
 It is useful in **two basic scenarios**:
 
 * Use with PowerShell _Core_ on (hopefully) all supported platforms.
-   * As of v6.1, PowerShell Core doesn't ship with clipboard cmdlets.
-   * This module fills this gap, albeit only with respect to _text_.  
-   * The implementation relies on external utilities (command-line programs) on all supported platforms:
-      * Windows: `clip.exe` (built in)
-      * macOS: `pbcopy` and `pbpaste` (built in)
-      * Linux: [`xclip`](https://github.com/astrand/xclip) (_requires installation_ via the system's package manager; e.g. `sudo apt-get install xclip`; available on X11-based [freedesktop.org](https://www.freedesktop.org/wiki/)-compliant desktops, such as on Ubuntu)
+  * As of v6.1, PowerShell Core doesn't ship with clipboard cmdlets.
+  * This module fills this gap, albeit only with respect to _text_.  
+  * The implementation relies on external utilities (command-line programs) on all supported platforms:
+    * Windows: `clip.exe` (built in)
+    * macOS: `pbcopy` and `pbpaste` (built in)
+    * Linux: [`xclip`](https://github.com/astrand/xclip) (_requires installation_ via the system's package manager; e.g. `sudo apt-get install xclip`; available on X11-based [freedesktop.org](https://www.freedesktop.org/wiki/)-compliant desktops, such as on Ubuntu)
 
 * Use with _older versions_ of _Windows PowerShell_.
 
@@ -33,15 +33,29 @@ It is useful in **two basic scenarios**:
 ## Manual Installation
 
 * Clone this repository (as a subfolder) into one of the directories listed in the `$env:PSModulePath` variable; e.g., to install the module in the context of the current user, choose the following parent folders:
-  * **Windows**: 
-     * Windows PowerShell: `$HOME\Documents\WindowsPowerShell\Modules`
-     * PowerShell Core `$HOME\Documents\PowerShell\Modules`
+  * **Windows**:
+    * Windows PowerShell: `$HOME\Documents\WindowsPowerShell\Modules`
+    * PowerShell Core `$HOME\Documents\PowerShell\Modules`
   * **macOs, Linux** (PowerShell Core): 
-    * `~/.local/share/powershell/Modules`
+    * `$HOME/.local/share/powershell/Modules`
 
 As long as you've cloned into one of the directories listed in the `$env:PSModulePath` variable - copying to some of which requires elevation / `sudo` - and as long your `$PSModuleAutoLoadingPreference` is not set (the default) or set to `All`, calling `Set-ClipboardText` or `Get-ClipboardText` should import the module on demand.
 
 To explicitly impot the module, run `Import-Module <path/to/module-folder>`.
+
+**Example** Install as a current-user-only module:
+
+Note: Assumes that [`git`](https://git-scm.com/) is installed.
+
+```powershell
+# Switch to the parent directory of the current user's modules.
+Set-Location $(if ($env:OS -eq 'Windows_NT') { "$HOME\Documents\{0}\Modules" -f ('WindowsPowerShell', 'PowerShell')[[bool]$IsCoreClr] } else { "$HOME/.local/share/powershell/Modules" })
+# Clone this repo into subdir. 'ClipboardText'; --depth 1 gets only the latest revision.
+git clone --depth 1 --quiet https://github.com/mklement0/ClipboardText
+```
+
+Run `Set-ClipboardText -?` to verify that installation succeeded and that the module is loaded on demand:
+you should see brief CLI help text.
 
 # Usage
 
@@ -57,7 +71,6 @@ $PWD.Path | Set-ClipboardText
 Get-ChildItem -File -Name | Set-ClipboardText
 ```
 
-
 * `Get-ClipboardText` retrieves text from the clipboard as an _array of lines_ by default; use `-Raw` to request the text as-is, as a potentially multi-line string.
 
 ```powershell
@@ -68,8 +81,6 @@ Get-ClipboardText -Raw > out.txt
 # a line number:
 Get-ClipboardText | ForEach-Object { $i=0 } { '#{0}: {1}' -f (++$i), $_ }
 ```
-
-
 
 For more, consult the **built-in help** after installation:
 

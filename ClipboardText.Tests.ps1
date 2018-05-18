@@ -89,14 +89,10 @@ Describe CommandInputTest {
     $pasted = Get-ClipboardText -Raw
     $pasted | Should -BeExactly $shouldBe
   }
-  It "copies and pastes an external program's output correctly" {    
-    # Note: ping without argument works on all platforms and prints help text
-    #       (to stderr)
-    ping 2>&1 | Set-ClipboardText
-    # Note: 2>&1 actually stores stderr lines as [errorrecord] instances.
-    #       Set-ClipboardText implicitly converts them to [string] via Out-String,
-    #       but for comparison we need to convert manually.
-    $shouldBe = ping 2>&1 | % { $_.ToString() }
+  It "Copies and pastes an external program's output correctly" {    
+    # Note: whoami without argument works on all supported platforms.
+    whoami | Set-ClipboardText
+    $shouldBe = whoami
     $is = Get-ClipboardText
     $is | Should -Be $shouldBe
   }

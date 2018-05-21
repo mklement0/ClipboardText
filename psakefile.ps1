@@ -88,17 +88,17 @@ task _commit -depends _assertWsCleanOrNoUntrackedFiles {
 }
 
 task _assertMasterBranch {
-  Assert -conditionToCheck ((git symbolic-ref --short HEAD) -eq 'master') -failureMessage "Must be on branch 'master'"
+  Assert ((iu git symbolic-ref --short HEAD) -eq 'master') "Must be on branch 'master'."
 }
 
 task _assertWsCleanOrNoUntrackedFiles {
-  Assert (-not ((git status --porcelain) -like '`?`? *')) 'Workspace must not contain untracked files.'
+  Assert (-not ((iu git status --porcelain) -like '`?`? *')) 'Workspace must not contain untracked files.'
 }
 
 
 #endregion
 
-#region == Internal elper functions
+#region == Internal helper functions
 
 # Helper function to prompt the user for confirmation, unless bypassed.
 function assert-confirmed {

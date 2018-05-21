@@ -42,10 +42,10 @@ task Test -alias t -description 'Invoke Pester to run all tests.' {
 
 }
 
-task Publish -alias pub -depends _assertMasterBranch, _assertWsCleanOrNoUntrackedFiles, Test -description 'Publish to the PowerShell Gallery.' {
+task Publish -alias pub -depends _assertMasterBranch, _assertNoUntrackedFiles, Test, Commit -description 'Publish to the PowerShell Gallery.' {
 }
 
-task LocalPublish -alias lpub -depends _assertMasterBranch, _assertWsCleanOrNoUntrackedFiles, Test -description 'Publish locally, to the current-user module location.' {
+task LocalPublish -alias lpub -depends _assertMasterBranch, _assertNoUntrackedFiles, Test, Commit -description 'Publish locally, to the current-user module location.' {
 
   $targetParentPath = if ($env:MK_UTIL_FOLDER_PERSONAL) {
     "$env:MK_UTIL_FOLDER_PERSONAL/Settings/PowerShell/Modules"
@@ -74,24 +74,31 @@ task LocalPublish -alias lpub -depends _assertMasterBranch, _assertWsCleanOrNoUn
 
 }
 
+task Commit -depends _assertNoUntrackedFiles {
 
-task pg -depends _commit {
-  'after'
+  if ((iu git status --porcelain).count -eq 0) {
+    Write-Verbose -Verbose '(Nothing to commit.)'
+  } else {
+    Write-Verbose -Verbose "Committing changes to branch '$(iu git symbolic-ref --short HEAD)'; please provide a commit message..."
+    iu git add --update .
+    iu git commit
+  }
+
 }
+
 
 #region == Internal helper tasks.
 
-task _commit -depends _assertWsCleanOrNoUntrackedFiles {
-
-  iu git add --update .
-
-}
+# Playground task for quick experimentation
+task pg -depends Commit {
+  'after'
+}  
 
 task _assertMasterBranch {
   Assert ((iu git symbolic-ref --short HEAD) -eq 'master') "Must be on branch 'master'."
 }
 
-task _assertWsCleanOrNoUntrackedFiles {
+task _assertNoUntrackedFiles {
   Assert (-not ((iu git status --porcelain) -like '`?`? *')) 'Workspace must not contain untracked files.'
 }
 

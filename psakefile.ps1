@@ -48,15 +48,16 @@ task Test -alias t -description 'Invoke Pester to run all tests.' {
 
 task Publish -alias pub -depends _assertMasterBranch, _assertNoUntrackedFiles, Test, Commit -description 'Publish to the PowerShell Gallery.' {
 
-  $moduleName = Split-Path -Leaf $PWD.Path
-  $moduleVersion = [semver] (Import-PowerShellDataFile "$($PWD.Path)/${moduleName}.psd1").ModuleVersion
+  $moduleName = Split-Path -Leaf $PSScriptRoot
+  $moduleVersion = [semver] (Import-PowerShellDataFile "${PSScriptRoot}/${moduleName}.psd1").ModuleVersion
 
   Write-Verbose -Verbose 'Creating and pushing tags...'
   # Create a tag for the new version
   iu git tag -f -a -m "Version $moduleVersion" "v$moduleVersion"
   # Update the generic 'pre'[release] and 'stable' tags to point to the same tag, as appropriate.
   # !! As of PowerShell Core v6.1.0-preview.2, PowerShell module manifests only support [version] instances
-  # !! and therefore do not support prereleases.
+  # !! and therefore do not support prereleases. 
+  # ?? However, Publish-Module does have an -AllowPrerelease switch - but it's undocumented as of 22 May 2018.
   iu git tag -f ('stable', 'pre')[[bool] $moduleVersion.PreReleaseLabel]
   # Push the tags to the origin repo.
   iu git push -f origin master --tags
@@ -71,15 +72,35 @@ About to PUBLISH TO THE POWERSHELL GALLERY:
     * you've run ```Invoke-psake LocalPublish`` to publish the module locally
     * you've waited for the changes to replicate to all VMs
     * you've run ``Push-Location (Split-Path (Get-Module -ListAvailable $moduleName).Path); if (`$?) { Invoke-Pester }``
-      and verified that the TESTS PASS
+      and verified that the TESTS PASS:
        * on ALL PLATFORMS and
-       * on WINDOWS, both in Windows PowerShell and PowerShell Core.
+       * on WINDOWS, both in PowerShell Core and Windows PowerShell, and for the latter also in v2.
 
 Proceed?
 "@
 
-  # Note: -Repository PSGallery is implied.
-  Publish-Module -Path $PWD.Path -NuGetApiKey (get-NuGetApiKey)
+  # Copy the module to a TEMPORARY FOLDER for publishing, so that 
+  # the .git folder and other files not relevant at runtime can be EXCLUDED.
+  # A feature request to have Publish-Module support exclusions directly is
+  # pending - see https://github.com/PowerShell/PowerShellGet/issues/191
+  $tempPublishDir = "$([io.Path]::GetTempPath())/${PID}/${moduleName}"
+  New-Item -ItemType Directory -Path $tempPublishDir
+
+  copy-forPublishing -LiteralPath $tempPublishDir
+
+  try {
+    # Note: -Repository PSGallery is implied.
+    Publish-Module -Path $tempPublishDir -NuGetApiKey (get-NuGetApiKey)
+  } finally {
+    Remove-Item -Force -Recurse -LiteralPath $tempPublishDir
+  }
+
+  Write-Verbose @"
+Publishing succeeded. 
+Note that it can take a few minutes for the new module [version] to appear in the gallery.
+
+URL: https://www.powershellgallery.com/packages/$moduleName"
+"@
 
 }
 
@@ -91,7 +112,7 @@ task LocalPublish -alias lpub -depends _assertMasterBranch, _assertNoUntrackedFi
     if ($env:OS -eq 'Windows_NT') { "$HOME\Documents\{0}\Modules" -f ('WindowsPowerShell', 'PowerShell')[[bool]$IsCoreClr] } else { "$HOME/.local/share/powershell/Modules" }
   }
   
-  $targetPath = Join-Path $targetParentPath (Split-Path -Leaf $PWD.Path)
+  $targetPath = Join-Path $targetParentPath (Split-Path -Leaf $PSScriptRoot)
 
   # Make sure the user confirms the intent.
   assert-confirmed @"
@@ -104,17 +125,7 @@ which will REPLACE the existing folder's content, if present.
 Proceed?
 "@
 
-  # Create the target folder or remove its *contents*, if present.
-  if (Test-Path -LiteralPath $targetPath) {
-    Remove-Item -Force -Recurse -Path $targetPath/*
-  } else {
-    New-Item -ItemType Directory -Path $targetPath
-  }
-
-  # Copy this folder's contents recursively, but exclude the .git subfolder, the .gitignore file, and the psake "make file".
-  Copy-Item -Recurse -Path "$($PWD.Path)/*" -Destination $targetPath -Exclude '.git', '.gitignore', 'psakefile.ps1'
-  
-  Write-Verbose -Verbose "'$($PWD.Path)' copied to '$targetPath'"
+  copy-forPublishing -LiteralPath $targetPath
 
 }
 
@@ -421,6 +432,26 @@ function get-NuGetApiKey {
   }
 
   $htConfig.NuGetApiKey
+}
+
+function copy-forPublishing {
+  param(
+    [Parameter(Mandatory)]
+    [string] $LiteralPath
+  )
+
+  # Create the target folder or, if it already exists, remove its *contents*.
+  if (Test-Path -LiteralPath $LiteralPath) {
+    Remove-Item -Force -Recurse -Path $LiteralPath/*
+  } else {
+    New-Item -ItemType Directory -Path $LiteralPath
+  }
+
+  # Copy this folder's contents recursively, but exclude the .git subfolder, the .gitignore file, and the psake "make file".
+  Copy-Item -Recurse -Path "$($PSScriptRoot)/*" -Destination $LiteralPath -Exclude '.git', '.gitignore', 'psakefile.ps1'
+  
+  Write-Verbose -Verbose "'$($PSScriptRoot)' copied to '$LiteralPath'"
+  
 }
 
 #endregion

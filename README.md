@@ -3,7 +3,7 @@
 <!-- START doctoc -->
 <!-- END doctoc -->
 
-# ClipboardText: Clipboard text support for PowerShell Core (cross-platform) and Windows PowerShell v2-v4
+# Clipboard text support for PowerShell Core (cross-platform) and Windows PowerShell v2-v4
 
 `ClipboardText` is a **cross-edition, cross-platform PowerShell module** that provides support
 for **copying text to and retrieving text from the system clipboard**, via the `Set-ClipboardText` and `Get-ClipboardText` cmdlets.

@@ -55,13 +55,13 @@ task LocalPublish -alias lpub -depends _assertMasterBranch, _assertNoUntrackedFi
 
   # Make sure the user confirms the intent.
   assert-confirmed @"
-  About to publish to:
+About to PUBLISH LOCALLY to:
 
-    $targetParentPath
+  $targetParentPath
+
+which will replace any existing version, if present.
   
-  which will replace any existing version, if present.
-    
-  Proceed?
+Proceed?
 "@
 
   $ErrorActionPreference = 'Stop'
@@ -107,7 +107,7 @@ Current version number:
 
     $ver
 
-Bump the version number
+BUMP THE VERSION NUMBER
 "@ -Choices $choices
 
     Assert ($ndx -ne $choices.count -1) 'Aborted by user request.'
@@ -116,10 +116,9 @@ Bump the version number
       $verNew = $ver
       break
     } else {
-        wv -v $choices[$ndx]
         $verNew = increment-version $ver -Property $choices[$ndx]    
         $ndx = read-HostChoice @"
-About to bump version number:
+About to bump to NEW VERSION NUMBER:
       
         $ver -> $verNew
       

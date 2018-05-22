@@ -22,16 +22,12 @@ task ListTasks -alias l -description 'List all defined tasks.' {
       'Name' { $name = $val }
       'Alias' { $alias = $val }
       'Description' {
-        [pscustomobject] @{ Name = $name; Alias = $alias; Description = $val }
+        if ($name -notmatch '^_') {
+          [pscustomobject] @{ Name = $name; Alias = $alias; Description = $val }
+        }
       }
     }
   } | Out-String | Write-Host -ForegroundColor Green
-}
-
-task Push -depends Test -description 'Commits changes and pushes them to GitHub.' {
-
-  assert-WsCleanOrNoUntrackedFiles
-
 }
 
 task Test -alias t -description 'Invoke Pester to run all tests.' {
@@ -83,7 +79,7 @@ Proceed?
 
 }
 
-task Commit -depends _assertNoUntrackedFiles {
+task Commit -alias c -depends _assertNoUntrackedFiles -description 'Commit pending changes locally.' {
 
   if ((iu git status --porcelain).count -eq 0) {
     Write-Verbose -Verbose '(Nothing to commit.)'
@@ -93,6 +89,10 @@ task Commit -depends _assertNoUntrackedFiles {
     iu git commit
   }
 
+}
+
+task Push -depends Commit -description 'Commit pending changes locally and push them to the remote "origin" repository.' {
+  iu git push origin (iu git symbolic-ref --short HEAD)
 }
 
 task Version -alias v {

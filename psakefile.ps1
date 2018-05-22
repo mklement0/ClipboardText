@@ -54,7 +54,15 @@ task LocalPublish -alias lpub -depends _assertMasterBranch, _assertNoUntrackedFi
   }
 
   # Make sure the user confirms the intent.
-  assert-confirmed "About to publish to '$targetParentPath', which will replace any existing version, if present.`nContinue?"
+  assert-confirmed @"
+  About to publish to:
+
+    $targetParentPath
+  
+  which will replace any existing version, if present.
+    
+  Proceed?
+"@
 
   $ErrorActionPreference = 'Stop'
 
@@ -153,16 +161,13 @@ task _assertNoUntrackedFiles {
 function assert-confirmed {
   param(
     [parameter(Mandatory)]
-    [string] $Message,
-    [string] $Caption
+    [string] $Message
   )
 
   if ($p_SkipPrompts) { Write-Verbose -Verbose 'Bypassing confirmation prompts, as requested.'; return }
 
-  # ??? consider a custom implementation of the prompt that defaults to "N"
-  # Assert $PSCmdlet.ShouldContinue($Message, $Caption) 'Aborted by user request.'
-  Assert (read-HostChoice $Message -Choices 'yes', 'abort') 'Aborted by user request.'
-  
+  Assert (0 -eq (read-HostChoice $Message -Choices 'yes', 'abort')) 'Aborted by user request.'
+
 }
 
 # Invokes an external utility, asserting successful execution.

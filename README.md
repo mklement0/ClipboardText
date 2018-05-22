@@ -1,4 +1,4 @@
-[![license](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/mklement0/ClipboardText/blob/master/LICENSE.md)
+[![PowerShell Gallery](https://img.shields.io/powershellgallery/dt/ClipboardText.svg)](https://powershellgallery.com/packages/ClipboardText) [![license](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/mklement0/ClipboardText/blob/master/LICENSE.md)
 
 <!-- START doctoc -->
 <!-- END doctoc -->
@@ -50,7 +50,9 @@ See also: [this repo's page in the PowerShell Gallery](https://www.powershellgal
 
 ## Manual Installation
 
-* Clone this repository (as a subfolder) into one of the directories listed in the `$env:PSModulePath` variable; e.g., to install the module in the context of the current user, choose the following parent folders:
+If you're still using PowerShell v2, manual installation is your only option.
+
+Clone this repository (as a subfolder) into one of the directories listed in the `$env:PSModulePath` variable; e.g., to install the module in the context of the current user, choose the following parent folders:
   * **Windows**:
     * Windows PowerShell: `$HOME\Documents\WindowsPowerShell\Modules`
     * PowerShell Core `$HOME\Documents\PowerShell\Modules`
@@ -59,9 +61,9 @@ See also: [this repo's page in the PowerShell Gallery](https://www.powershellgal
 
 As long as you've cloned into one of the directories listed in the `$env:PSModulePath` variable - copying to some of which requires elevation / `sudo` - and as long your `$PSModuleAutoLoadingPreference` is not set (the default) or set to `All`, calling `Set-ClipboardText` or `Get-ClipboardText` should import the module on demand - except in _PowerShell v2_.
 
-To explicitly impot the module, run `Import-Module <path/to/module-folder>`.
+To explicitly import the module, run `Import-Module <path/to/module-folder>`.
 
-**Example** Install as a current-user-only module:
+**Example**: Install as a current-user-only module:
 
 Note: Assumes that [`git`](https://git-scm.com/) is installed.
 

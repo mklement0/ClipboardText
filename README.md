@@ -27,6 +27,27 @@ It is useful in **two basic scenarios**:
 
 # Installation
 
+## Installation from the PowerShell Gallery
+
+**Prerequisite**:
+ * The `PowerShellGet` module must be installed (verify with `Get-Command Install-Module`).  
+   `PowerShell Get` comes with PowerShell version 5 or higher, but is also available as a download for versions 3 and 4 - see [the docs](https://docs.microsoft.com/en-us/powershell/gallery/installing-psget).
+
+```powershell
+# Installation for the current user only.
+PS> Install-Module ClipboardText -Scope CurrentUser
+
+# Installation for ALL users.
+# IMPORTANT: Requires an ELEVATED session:
+#   On Windows: 
+#     Right-click on the Windows PowerShell icon and select "Run as Administrator".
+#   On Linux and macOS:
+#     Run `sudo pwsh` from an existing terminal.
+ELEV-PS> Install-Module ClipboardText -Scope CurrentUser
+```
+
+See also: [this repo's page in the PowerShell Gallery](https://www.powershellgallery.com/packages/ClipboardText).
+
 ## Manual Installation
 
 * Clone this repository (as a subfolder) into one of the directories listed in the `$env:PSModulePath` variable; e.g., to install the module in the context of the current user, choose the following parent folders:

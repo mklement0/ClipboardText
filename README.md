@@ -20,8 +20,8 @@ It is useful in **two basic scenarios**:
 
 * Use with _older versions_ of _Windows PowerShell_.
 
-  * Since v5.0, Windows PowerShell ships with `Set-Clipboard` and `Get-Clipboard` cmdlets.
-  * This module fills this gap for v2-v4, albeit only with respect to _text_.  
+  * Only since v5.0 does Windows PowerShell ship with `Set-Clipboard` and `Get-Clipboard` cmdlets.
+  * This module fills the gap for v2-v4, albeit only with respect to _text_.  
   * For implementing backward-compatible functionality, you may also use this module in v5+, in which case this module's cmdlets call the built-in ones behind the scenes.
   * On older versions, the implementation uses [Windows Forms](https://en.wikipedia.org/wiki/Windows_Forms) .NET types behind the scenes (namespace `System.Windows.Forms`)
 
@@ -60,7 +60,7 @@ If you're still using PowerShell v2, manual installation is your only option.
 Clone this repository (as a subfolder) into one of the directories listed in the `$env:PSModulePath` variable; e.g., to install the module in the context of the current user, choose the following parent folders:
   * **Windows**:
     * Windows PowerShell: `$HOME\Documents\WindowsPowerShell\Modules`
-    * PowerShell Core `$HOME\Documents\PowerShell\Modules`
+    * PowerShell Core: `$HOME\Documents\PowerShell\Modules`
   * **macOs, Linux** (PowerShell Core): 
     * `$HOME/.local/share/powershell/Modules`
 

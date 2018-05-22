@@ -1,3 +1,6 @@
+# Note: By default, psake behaves as if $ErrorActionPreference = 'Stop' had been set.
+#       I.e., *any* PS errors - even nonterminating ones - abort execution by default.
+
 properties {
   # Supported parameters (pass with -parameter @{ <name> = <value>[; ...] }):
   #
@@ -6,7 +9,12 @@ properties {
   #
   $p_SkipTests = $SkipTests -or $SkipTest -or $NoTests -or $NoTest
   $p_SkipPrompts = $Force -or $Yes
+
+  $p_configPsdFile = "$HOME/.new-moduleproject.psd1"
+
 }
+
+
 
 # If no task is passed, list the available tasks. 
 task default -depends ListTasks
@@ -22,7 +30,7 @@ task ListTasks -alias l -description 'List all defined tasks.' {
       'Name' { $name = $val }
       'Alias' { $alias = $val }
       'Description' {
-        if ($name -notmatch '^_') {
+        if ($name -notmatch '^_') { # ignore internal helper tasks
           [pscustomobject] @{ Name = $name; Alias = $alias; Description = $val }
         }
       }
@@ -41,17 +49,37 @@ task Test -alias t -description 'Invoke Pester to run all tests.' {
 task Publish -alias pub -depends _assertMasterBranch, _assertNoUntrackedFiles, Test, Commit -description 'Publish to the PowerShell Gallery.' {
 
   $moduleName = Split-Path -Leaf $PWD.Path
-  $moduleVersionStr = (Import-PowerShellDataFile (Join-Path $PWD.Path $moduleName.psd1)).ModuleVersion
+  $moduleVersion = [semver] (Import-PowerShellDataFile "$($PWD.Path)/${moduleName}.psd1").ModuleVersion
+
+  Write-Verbose -Verbose 'Creating and pushing tags...'
+  # Create a tag for the new version
+  iu git tag -f -a -m "Version $moduleVersion" "v$moduleVersion"
+  # Update the generic 'pre'[release] and 'stable' tags to point to the same tag, as appropriate.
+  # !! As of PowerShell Core v6.1.0-preview.2, PowerShell module manifests only support [version] instances
+  # !! and therefore do not support prereleases.
+  iu git tag -f ('stable', 'pre')[[bool] $moduleVersion.PreReleaseLabel]
+  # Push the tags to the origin repo.
+  iu git push -f origin master --tags
 
   assert-confirmed @"
 About to PUBLISH TO THE POWERSHELL GALLERY:
 
-  $moduleName
-  $moduleVersionStr
+  Module:  $moduleName
+  Version: $moduleVersion
   
+  IMPORTANT: Make sure that:
+    * you've run ```Invoke-psake LocalPublish`` to publish the module locally
+    * you've waited for the changes to replicate to all VMs
+    * you've run ``Push-Location (Split-Path (Get-Module -ListAvailable $moduleName).Path); if (`$?) { Invoke-Pester }``
+      and verified that the TESTS PASS
+       * on ALL PLATFORMS and
+       * on WINDOWS, both in Windows PowerShell and PowerShell Core.
+
 Proceed?
 "@
-  
+
+  # Note: -Repository PSGallery is implied.
+  Publish-Module -Path $PWD.Path -NuGetApiKey (get-NuGetApiKey)
 
 }
 
@@ -75,9 +103,6 @@ which will REPLACE the existing folder's content, if present.
   
 Proceed?
 "@
-
-  $ErrorActionPreference = 'Stop'
-
 
   # Create the target folder or remove its *contents*, if present.
   if (Test-Path -LiteralPath $targetPath) {
@@ -145,17 +170,22 @@ Proceed?
     }
   }
 
+  # Update the module manifest with the new version number.
   if ($ver -ne $verNew) {
     update-ModuleManifestVersion -Path $psdFile -ModuleVersion $verNew
   }
 
 }
 
+task EditConfig -alias edc -description "Open the global configuration file for editing." {  
+  Invoke-Item -LiteralPath $p_configPsdFile
+}
+
 #region == Internal helper tasks.
 
-# Playground task for quick experimentation
-task pg -depends Commit {
-  'after'
+# # Playground task for quick experimentation
+task pg  {
+  get-NuGetApiKey -Prompt
 }  
 
 task _assertMasterBranch {
@@ -322,6 +352,7 @@ function read-HostChoice {
 # Updates the specified module manifest with a new version number.
 # Note: We do NOT use Update-ModuleManifest, because it rewrites the
 #       file in a manner that wipes out custom comments.
+#       !! RELIES ON EACH PROPERTY BEING DEFINED ON ITS OWN LINE.
 function update-ModuleManifestVersion {
   param(
     [Parameter(Mandatory)]
@@ -336,6 +367,60 @@ function update-ModuleManifestVersion {
   $lines = Get-Content -LiteralPath $LiteralPath
 
   $lines -replace '^(\s*ModuleVersion\s*=).*', ('$1 ''{0}''' -f $Version) | Set-Content -Encoding ascii $LiteralPath
+}
+
+function get-settings {
+  if (-not (Test-Path $p_configPsdFile)) {
+    Write-Warning "Settings file not found: $p_configPsdFile"
+    @{}
+  } else {
+    Import-PowerShellDataFile -LiteralPath $p_configPsdFile
+  }
+}
+
+function get-NuGetApiKey {
+  param(
+    [switch] $Prompt
+  )
+  
+  $htConfig = get-settings
+  
+  if ($Prompt -or -not $htConfig.NuGetApiKey) {
+    $configPsdFile = $p_configPsdFile
+    # e.g. 5ecf36c5-437f-0123-7654-c91df8f79ca4
+    $regex = '^[a-z0-9]{8}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{12}$'
+    while ($true) {
+      $nuGetApiKey = (Read-Host -Prompt "Enter your NuGet API Key (will be saved in '$configPsdFile')").Trim()
+      if ($nuGetApiKey -match $regex) { break }
+      Write-Warning "Invalid key specified; a vaid key must match regex '$regex'. Please try again."
+    }
+
+    # Update the settings file.
+    if (-not (Test-Path -LiteralPath $configPsdFile)) { # create 
+@"
+<#
+  Global configuration file for PowerShell module projects created with New-ModuleProject
+
+  IMPORTANT: 
+    * Keep each entry on its own line.
+    * Save this file as BOM-less UTF-8 or ASCII and use only ASCII characters.
+
+#>
+@{
+  NuGetApiKey = '$nuGetApiKey'
+}
+"@ | Set-Content -Encoding Ascii -LiteralPath $configPsdFile
+    } else { # update
+      $lines = Get-Content -LiteralPath $configPsdFile
+
+      $lines -replace '^(\s*NuGetApiKey\s*=).*', ('$1 ''{0}''' -f $nuGetApiKey) | Set-Content -Encoding ascii $configPsdFile
+          
+    }
+
+    $htConfig.NuGetApiKey = $nuGetApiKey
+  }
+
+  $htConfig.NuGetApiKey
 }
 
 #endregion

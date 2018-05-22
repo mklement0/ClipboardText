@@ -4,4 +4,5 @@ Versioning complies with [semantic versioning (semver)](http://semver.org/).
 
 <!-- RETAIN THIS COMMENT. An entry template for a new version is automatically added each time `make version` is called. Fill in changes afterward. -->
 
-* 17 May 2018: Initial commit (prior to public release).
+* **[v0.1.0]** (2018-05-22):
+  * Initial public release.

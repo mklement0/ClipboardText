@@ -1,6 +1,3 @@
-<!-- Remove, once published/released. -->
-![project status - not ready for release](https://img.shields.io/badge/status-not_ready_for_release-red.svg)
-
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/mklement0/ClipboardText/blob/master/LICENSE.md)
 
 <!-- START doctoc -->

@@ -46,7 +46,7 @@ task Test -alias t -description 'Invoke Pester to run all tests.' {
 
 }
 
-task Publish -alias pub -depends _assertMasterBranch, _assertNoUntrackedFiles, Test, Commit -description 'Publish to the PowerShell Gallery.' {
+task Publish -alias pub -depends _assertMasterBranch, _assertNoUntrackedFiles, Test, Version, Commit -description 'Publish to the PowerShell Gallery.' {
 
   $moduleName = Split-Path -Leaf $PSScriptRoot
   $moduleVersion = [semver] (Import-PowerShellDataFile "${PSScriptRoot}/${moduleName}.psd1").ModuleVersion

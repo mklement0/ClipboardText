@@ -31,12 +31,18 @@ It is useful in **two basic scenarios**:
 
 **Prerequisite**:
  * The `PowerShellGet` module must be installed (verify with `Get-Command Install-Module`).  
-   `PowerShell Get` comes with PowerShell version 5 or higher, but is also available as a download for versions 3 and 4 - see [the docs](https://docs.microsoft.com/en-us/powershell/gallery/installing-psget).
+   `PowerShellGet` comes with PowerShell version 5 or higher, but is also available as a download for versions 3 and 4 - see [the docs](https://docs.microsoft.com/en-us/powershell/gallery/installing-psget).
+
+* Current-user-only installation:
 
 ```powershell
 # Installation for the current user only.
 PS> Install-Module ClipboardText -Scope CurrentUser
+```
 
+* All-users installation (requires elevation / `sudo`):
+
+```powershell
 # Installation for ALL users.
 # IMPORTANT: Requires an ELEVATED session:
 #   On Windows: 

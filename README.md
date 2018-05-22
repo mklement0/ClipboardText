@@ -43,7 +43,7 @@ PS> Install-Module ClipboardText -Scope CurrentUser
 #     Right-click on the Windows PowerShell icon and select "Run as Administrator".
 #   On Linux and macOS:
 #     Run `sudo pwsh` from an existing terminal.
-ELEV-PS> Install-Module ClipboardText -Scope CurrentUser
+ELEV-PS> Install-Module ClipboardText
 ```
 
 See also: [this repo's page in the PowerShell Gallery](https://www.powershellgallery.com/packages/ClipboardText).

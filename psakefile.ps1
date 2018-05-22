@@ -52,21 +52,22 @@ task LocalPublish -alias lpub -depends _assertMasterBranch, _assertNoUntrackedFi
   } else {
     if ($env:OS -eq 'Windows_NT') { "$HOME\Documents\{0}\Modules" -f ('WindowsPowerShell', 'PowerShell')[[bool]$IsCoreClr] } else { "$HOME/.local/share/powershell/Modules" }
   }
+  
+  $targetPath = Join-Path $targetParentPath (Split-Path -Leaf $PWD.Path)
 
   # Make sure the user confirms the intent.
   assert-confirmed @"
 About to PUBLISH LOCALLY to:
 
-  $targetParentPath
+  $targetPath
 
-which will replace any existing version, if present.
+which will REPLACE the existing folder's content, if present.
   
 Proceed?
 "@
 
   $ErrorActionPreference = 'Stop'
 
-  $targetPath = Join-Path $targetParentPath (Split-Path -Leaf $PWD.Path)
 
   # Create the target folder or remove its *contents*, if present.
   if (Test-Path -LiteralPath $targetPath) {

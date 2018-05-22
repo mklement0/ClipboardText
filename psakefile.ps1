@@ -39,6 +39,20 @@ task Test -alias t -description 'Invoke Pester to run all tests.' {
 }
 
 task Publish -alias pub -depends _assertMasterBranch, _assertNoUntrackedFiles, Test, Commit -description 'Publish to the PowerShell Gallery.' {
+
+  $moduleName = Split-Path -Leaf $PWD.Path
+  $moduleVersionStr = (Import-PowerShellDataFile (Join-Path $PWD.Path $moduleName.psd1)).ModuleVersion
+
+  assert-confirmed @"
+About to PUBLISH TO THE POWERSHELL GALLERY:
+
+  $moduleName
+  $moduleVersionStr
+  
+Proceed?
+"@
+  
+
 }
 
 task LocalPublish -alias lpub -depends _assertMasterBranch, _assertNoUntrackedFiles, Test, Commit -description 'Publish locally, to the current-user module location.' {

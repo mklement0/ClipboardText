@@ -29,9 +29,8 @@ It is useful in **two basic scenarios**:
 
 ## Installation from the PowerShell Gallery
 
-**Prerequisite**:
- * The `PowerShellGet` module must be installed (verify with `Get-Command Install-Module`).  
-   `PowerShellGet` comes with PowerShell version 5 or higher, but is also available as a download for versions 3 and 4 - see [the docs](https://docs.microsoft.com/en-us/powershell/gallery/installing-psget).
+**Prerequisite**: The `PowerShellGet` module must be installed (verify with `Get-Command Install-Module`).  
+`PowerShellGet` comes with PowerShell version 5 or higher, but is also available as a download for versions 3 and 4 - see [the docs](https://docs.microsoft.com/en-us/powershell/gallery/installing-psget).
 
 * Current-user-only installation:
 

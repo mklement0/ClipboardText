@@ -8,22 +8,26 @@
 `ClipboardText` is a **cross-edition, cross-platform PowerShell module** that provides support
 for **copying text to and retrieving text from the system clipboard**, via the `Set-ClipboardText` and `Get-ClipboardText` cmdlets.
 
-It is useful in **two basic scenarios**:
+It is useful in the following **scenarios**:
 
-* Use with PowerShell _Core_ on (hopefully) all supported platforms.
-  * As of v6.1, PowerShell Core doesn't ship with clipboard cmdlets.
+* **Use with PowerShell _Core_ on (hopefully) all supported platforms.**
+  * As of v6.1, PowerShell Core doesn't ship with clipboard cmdlets.
   * This module fills this gap, albeit only with respect to _text_.  
   * The implementation relies on external utilities (command-line programs) on all supported platforms:
     * Windows: `clip.exe` (built in)
     * macOS: `pbcopy` and `pbpaste` (built in)
     * Linux: [`xclip`](https://github.com/astrand/xclip) (_requires installation_ via the system's package manager; e.g. `sudo apt-get install xclip`; available on X11-based [freedesktop.org](https://www.freedesktop.org/wiki/)-compliant desktops, such as on Ubuntu)
 
-* Use with _older versions_ of _Windows PowerShell_.
+* **Use with _older versions_ of _Windows PowerShell_.**
 
   * Only since v5.0 does Windows PowerShell ship with `Set-Clipboard` and `Get-Clipboard` cmdlets.
   * This module fills the gap for v2-v4, albeit only with respect to _text_.  
   * For implementing backward-compatible functionality, you may also use this module in v5+, in which case this module's cmdlets call the built-in ones behind the scenes.
   * On older versions, the implementation uses [Windows Forms](https://en.wikipedia.org/wiki/Windows_Forms) .NET types behind the scenes (namespace `System.Windows.Forms`)
+
+* **Use in _universal scripts_.**
+  * Universal scripts are scripts that run on both Windows PowerShell and Powershell Core, on all supported platforms, including older versions of Windows PowerShell; in this case, down to version 2.
+
 
 # Installation
 

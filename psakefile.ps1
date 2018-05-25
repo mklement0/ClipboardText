@@ -245,9 +245,15 @@ function invoke-Utility {
 }
 
 # Increment a [semver] or [version] instance's specified component.
-# Outputs an inrecmented [semver] or [version] instance.
-# Example:
-#   increment-version 1.2.3 # -> [semver] '1.2.4'
+# Outputs an inremented [semver] or [version] instance.
+# If -Property is not specified, the patch / build level is incremented.
+# If the input version is not already a [version] or [semver] version,
+# [semver] is assumed, EXCEPT when:
+#   * [semver] is not available (WinPS up to at least v5.1)
+#   * a -Property name is passed that implies [version], namely 'Build' or 'Revision'.
+# Examples:
+#   increment-version 1.2.3 -Property Minor # -> [semver] '1.3.3'
+#   increment-version 1.2.3 -Property Revision # -> [version] '1.2.3.1'
 function increment-Version {
 
   param(
@@ -265,7 +271,7 @@ function increment-Version {
   if ($Property -in 'Build', 'Revision') { $AssumeLegacyVersion = $True }
 
   # See if [semver] is supported in the host PS version (not in WinPS as of v5.1).
-  $isSemVerSupported = [bool] [type]::GetType('System.Management.Automation.SemanticVersion')
+  $isSemVerSupported = [bool] $(try { [semver] } catch {})
 
   if ($isSemVerSupported -and $Version -is [semver]) {
     $verObj = $Version
@@ -311,7 +317,6 @@ function increment-Version {
   New-Object $verObj.GetType().FullName -ArgumentList $arguments
 
 }
-
 
 <#
 .SYNOPSIS

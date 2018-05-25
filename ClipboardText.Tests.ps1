@@ -2,17 +2,13 @@
    * Make sure this file is saved as *UT8 with BOM*, so that
      literal non-ASCII characters are interpreted correctly.
 
-   * To run the tests in PSv2, Pester must be loaded *manually*, via the *full
+   * When run in WinPSv3+, an attempt is made to run the tests in WinPSv2
+     too, but note that requires prior installation of v2 support.
+     Also, in PSv2, Pester must be loaded *manually*, via the *full
      path to its *.psd1 file* (seemingly, v2 doesn't find modules located in
-     \<version>\ subdirs.); e.g.:
-
-       # NOTE: Adjust path as needed.
-       ipmo 'C:\Program Files\WindowsPowerShell\Modules\Pester\4.3.1\Pester.psd1'
-
-       # If you're willing to assume that the last matching file in the following
-       # wildcard pattern loads the *most recent* among multiple installed Pester
-       # versions:
-       ipmo (gi 'C:\Program Files\WindowsPowerShell\Modules\Pester\*\Pester.psd1')[-1]
+     \<version>\ subdirs.).
+     For interactive use, the simplest approach is to invoke v2 as follows:
+        powershell.exe -version 2 -Command "Import-Module '$((Get-Module Pester).Path)'
 #>
 
 # PSv2 compatibility: makes sure that $PSScriptRoot reflects this script's folder.
@@ -108,11 +104,11 @@ Describe OutputWidthTest {
     # 2 columns.
     $obj = [pscustomobject] @{ one = '1' * 40; two = '2' * 216 }
   }
-  It "truncates lines that are too wide for the specified width" {
+  It "Truncates lines that are too wide for the specified width" {
     $obj | Set-ClipboardText -Width 80
     (Get-ClipboardText)[3] | Should -BeLikeExactly '*...'
   }
-  It "allows incrementing the width to accommodate wider lines" {
+  It "Allows incrementing the width to accommodate wider lines" {
     $obj | Set-ClipboardText -Width 257 # 40 + 1 (space between columns) + 216
     (Get-ClipboardText)[3].TrimEnd() | Should -BeLikeExactly '*2'
   }
@@ -121,14 +117,12 @@ Describe OutputWidthTest {
 # Note: These tests apply to PS *Core* only, because Windows PowerShell doesn't require external utilities for clipboard support.
 Describe MissingExternalUtilityTest {
 
-  # See if we're running on *Windows PowerShell*, in which case we skip the
+  # On *Windows PowerShell*, in which case we skip the
   # tests, because Windows Powershell does't require external utilities for
   # access to the clipboard.
-  # $isWinPs = $null, 'Desktop' -contains $PSVersionTable.PSEdition
   # Note: We don't exit right away, because do want to invoke the `It` block
   # with `-Skip` set to $True, so that the results indicated that the test
   # was deliberately skipped.
-
   if (-not $isWinPs) {
 
     # Determine the name of the module being tested.
@@ -156,7 +150,33 @@ Describe MissingExternalUtilityTest {
 
 }
 
-Describe 'MTA Tests' {
-  
-  It
+Describe MTAtests {
+  # Windows PowerShell:
+  #  A WinForms text-box workaround is needed when PowerShell is running in COM MTA
+  #  (multi-threaded apartment) mode.
+  #  By default, v2 runs in MTA mode and v3+ in STA mode.
+  #  However, you can *opt into* MTA mode in v3+, and the workaround is then needed too.
+  #  (In PSCore on Windows, MTA is the default again, but it has no access to WinForms
+  #   anyway and uses external utility clip.exe instead.)
+  It "Windows PowerShell: Works in MTA mode" -Skip:(-not $isWinPs -or $PSVersionTable.PSVersion.Major -eq 2) {
+    # Recursively invokes the 'StringInputTest' tests.
+    # !! This produces NO OUTPUT; to troubleshoot, run the command interactively from the project folder.
+    powershell.exe -noprofile -MTA -Command "if ([threading.thread]::CurrentThread.ApartmentState.ToString() -ne 'MTA') { Throw "Not in MTA mode." }; Invoke-Pester -Name StringInputTest -EnableExit"
+    $LASTEXITCODE | Should -Be 0
+  }
+}
+
+Describe v2Tests {
+  # Invoke these tests in *WinPS v2*, which amounts to a RECURSION.
+  It "Windows PowerShell: Passes all tests in v2 as well." -Skip:(-not $isWinPs -or $PSVersionTable.PSVersion.Major -eq 2) {
+    # !! An Install-Module-installed Pester is located in a version-named subfolder, which v2 cannot 
+    # !! detect, so we import Pester by explicit path.
+    # !! Also `-version 2` must be the *first* argument passed to `powershell.exe`.
+    #
+    # !! NO OUTPUT IS PRODUCED - to troubleshoot, run the command interactively from the project folder.
+    # !! Notably, *prior installation of v2 support is needed*, and PowerShell seems to quietly ignore `-version 2`
+    # !! in its absence, so we have to test from *within* the session.
+    powershell.exe -version 2 -noprofile  -Command "Import-Module '$((Get-Module Pester).Path)'; if (`$PSVersionTable.PSVersion.Major -ne 2) { Throw 'v2 SUPPORT IS NOT INSTALLED.' }; Invoke-Pester"
+    $LASTEXITCODE | Should -Be 0
+  }
 }

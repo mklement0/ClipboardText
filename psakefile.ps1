@@ -49,7 +49,7 @@ task Test -alias t -description 'Invoke Pester to run all tests.' {
 task Publish -alias pub -depends _assertMasterBranch, _assertNoUntrackedFiles, Test, Version, Commit -description 'Publish to the PowerShell Gallery.' {
 
   $moduleName = Split-Path -Leaf $PSScriptRoot
-  $moduleVersion = [semver] (Import-PowerShellDataFile "${PSScriptRoot}/${moduleName}.psd1").ModuleVersion
+  $moduleVersion = [version] (Import-PowerShellDataFile "${PSScriptRoot}/${moduleName}.psd1").ModuleVersion
 
   Write-Verbose -Verbose 'Creating and pushing tags...'
   # Create a tag for the new version
@@ -145,11 +145,11 @@ task Push -depends Commit -description 'Commit pending changes locally and push 
   iu git push origin (iu git symbolic-ref --short HEAD)
 }
 
-task Version -alias v {
+task Version -alias v -description 'Show or bump the module''s version number.' {
 
   $psdFile = Resolve-Path ./*.psd1
   $htModuleMetaData = Import-PowerShellDataFile -LiteralPath $psdFile
-  $ver = [semver] $htModuleMetaData.ModuleVersion
+  $ver = [version] $htModuleMetaData.ModuleVersion
 
   $choices = 'Major', 'mInor', 'Patch', 'Retain', 'Abort'
   while ($True) {
@@ -194,6 +194,10 @@ task EditConfig -alias edc -description "Open the global configuration file for 
 
 task EditManifest -alias edm -description "Open the module manifest for editing." {  
   Invoke-Item -LiteralPath "$PSScriptRoot/$(Split-Path -Leaf $PSScriptRoot).psd1"
+}
+
+task EditPsakeFile -alias edp -description "Open the psakefile for editing." {  
+  Invoke-Item -LiteralPath $PSCommandPath
 }
 
 #region == Internal helper tasks.
@@ -256,15 +260,20 @@ function increment-Version {
     [switch] $AssumeLegacyVersion # with string input, assume [version] rather than [semver]
   )
   
+  # If the version is passed as a string and property names specific to [version]
+  # are used, assume [version]
   if ($Property -in 'Build', 'Revision') { $AssumeLegacyVersion = $True }
 
-  if ($Version -is [semver]) {
+  # See if [semver] is supported in the host PS version (not in WinPS as of v5.1).
+  $isSemVerSupported = [bool] [type]::GetType('System.Management.Automation.SemanticVersion')
+
+  if ($isSemVerSupported -and $Version -is [semver]) {
     $verObj = $Version
   } elseif ($Version -is [version]) {
     $verObj = $Version    
   } else {
     $verObj = $null
-    if (-not $AssumeLegacyVersion) {
+    if ($isSemVerSupported -and -not $AssumeLegacyVersion) {
        $null = [semver]::TryParse([string] $Version, [ref] $verObj)
     }
     if (-not $verObj -and -not ([version]::TryParse([string] $Version, [ref] $verObj))) {
@@ -276,15 +285,17 @@ function increment-Version {
     ($verObj.Major, ($verObj.Major + 1))[$Property -eq 'Major'],
     ($verObj.Minor, ($verObj.Minor + 1))[$Property -eq 'Minor']
     
-  if ($verObj -is [semver]) {
+  if ($isSemVerSupported -and $verObj -is [semver]) {
 
     if ($Property -eq 'Revision') { Throw "[semver] versions do not have a '$Property' property." }
+    # Allow interchangeable use of 'Build' and 'Patch' to refer to the 3rd component.
     if ($Property -eq 'Build') { $Property = 'Patch' }
       
     $arguments += ($verObj.Patch, ($verObj.Patch + 1))[$Property -eq 'Patch']
 
   } else { # [version]
 
+    # Allow interchangeable use of 'Build' and 'Patch' to refer to the 3rd component.
     if ($Property -eq 'Patch') { $Property = 'Build' }
     
     if ($Property -in 'Build', 'Revision') {
@@ -376,7 +387,7 @@ function update-ModuleManifestVersion {
     ,
     [Parameter(Mandatory)]
     [Alias('ModuleVersion')]
-    [semver] $Version
+    [version] $Version
   )
 
   $lines = Get-Content -LiteralPath $LiteralPath

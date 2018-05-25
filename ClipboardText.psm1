@@ -69,7 +69,11 @@ Retrieves text from the clipboard as-is and saves it to file out.txt
   $rawText = $lines = $null
   if (test-WindowsPowerShell) { # *Windows PowerShell*
 
-    if ($PSVersionTable.PSVersion -ge [version] '5.0.0') { # Ps*Win* v5+ has Get-Clipboard / Set-Clipboard cmdlets.
+    # Determine this thread's COM threading model, because the clipboard-access method
+    # must be chosen accordingly.
+    $isSTA = [threading.thread]::CurrentThread.ApartmentState.ToString() -eq 'STA'
+
+    if ($PSVersionTable.PSVersion.Major -ge 5 -and $isSTA) { # Ps*Win* v5+ has Get-Clipboard / Set-Clipboard cmdlets, but they too require STA mode.
       
       if ($Raw) {
         $rawText = Get-Clipboard -Format Text -Raw
@@ -77,14 +81,15 @@ Retrieves text from the clipboard as-is and saves it to file out.txt
         $lines = Get-Clipboard -Format Text
       }
 
-    } else { # PSWin v4-
+    } else { # WinPSv4- or WinPSv5+ explicitly started with the -MTA switch
+
       Add-Type -AssemblyName System.Windows.Forms
-      if ([threading.thread]::CurrentThread.ApartmentState.ToString() -eq 'STA') {
+      if ($isSTA) {
           # -- STA mode:
           Write-Verbose "STA mode: Using [Windows.Forms.Clipboard] directly."
           # To be safe, we explicitly specify that Unicode (UTF-16) be used - older platforms may default to ANSI.
           $rawText = [System.Windows.Forms.Clipboard]::GetText([System.Windows.Forms.TextDataFormat]::UnicodeText)
-      } else {
+      } else { # $isMTA
           # -- MTA mode: Since the clipboard must be accessed in STA mode, we use a [System.Windows.Forms.TextBox] instance to mediate.
           Write-Verbose "MTA mode: Using a [System.Windows.Forms.TextBox] instance for clipboard access."
           $tb = New-Object System.Windows.Forms.TextBox
@@ -92,6 +97,7 @@ Retrieves text from the clipboard as-is and saves it to file out.txt
           $tb.Paste()
           $rawText = $tb.Text
       }
+
     }
 
   } else {  # PowerShell *Core*
@@ -286,16 +292,20 @@ clipboard, ensuring that output lines are 500 characters wide.
 
     if (test-WindowsPowerShell) { # *Windows PowerShell*
         
-        if ($PSVersionTable.PSVersion -ge [version] '5.1.0') { # Ps*Win* v5.1+ now has Get-Clipboard / Set-Clipboard cmdlets.
+        # Determine this thread's COM threading model, because the clipboard-access method
+        # must be chosen accordingly.
+        $isSTA = [threading.thread]::CurrentThread.ApartmentState.ToString() -eq 'STA'
+
+        if ($PSVersionTable.PSVersion.Major -ge 5 -and $isSTA) { # Ps*Win* v5+ has Get-Clipboard / Set-Clipboard cmdlets, but they too require STA mode.
           
           # !! As of PsWinV5.1, `Set-Clipboard ''` reports a spurious error (but still manages to effectively) clear the clipboard.
           # !! By contrast, using `Set-Clipboard $null` succeeds.
           Set-Clipboard -Value ($allText, $null)[$allText.Length -eq 0]
           
-        } else { # PSv5.0-
+        } else { # WinPSv4- or WinPSv5+ explicitly started with the -MTA switch
           
           Add-Type -AssemblyName System.Windows.Forms
-          if ([threading.thread]::CurrentThread.ApartmentState.ToString() -eq 'STA') {
+          if ($isSTA) {
               # -- STA mode: we can use [Windows.Forms.Clipboard] directly.
               Write-Verbose "STA mode: Using [Windows.Forms.Clipboard] directly."
               if ($allText.Length -eq 0) { $AllText = "`0" } # Strangely, SetText() breaks with an empty string, claiming $null was passed -> use a null char.

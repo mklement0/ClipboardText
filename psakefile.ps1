@@ -69,12 +69,12 @@ About to PUBLISH TO THE POWERSHELL GALLERY:
   Version: $moduleVersion
   
   IMPORTANT: Make sure that:
-    * you've run ```Invoke-psake LocalPublish`` to publish the module locally
-    * you've waited for the changes to replicate to all VMs
+    * you've run ```Invoke-psake LocalPublish`` to publish the module locally.
+    * you've waited for the changes to replicate to all VMs.
     * you've run ``Push-Location (Split-Path (Get-Module -ListAvailable $moduleName).Path); if (`$?) { Invoke-Pester }``
       and verified that the TESTS PASS:
        * on ALL PLATFORMS and
-       * on WINDOWS, both in PowerShell Core and Windows PowerShell, and for the latter also in v2.
+       * on WINDOWS, both in PowerShell Core and Windows PowerShell
 
 Proceed?
 "@

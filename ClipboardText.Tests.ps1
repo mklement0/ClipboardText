@@ -25,6 +25,10 @@ Import-Module $PSScriptRoot -Force
 # Use the platform-appropiate newline.
 $nl = [Environment]::NewLine
 
+# See if we're running on *Windows PowerShell*
+$isWinPs = $null, 'Desktop' -contains $PSVersionTable.PSEdition
+
+
 Describe StringInputTest {
   It "Copies and pastes a string correctly." {
     $string = "Here at $(Get-Date)"
@@ -120,10 +124,10 @@ Describe MissingExternalUtilityTest {
   # See if we're running on *Windows PowerShell*, in which case we skip the
   # tests, because Windows Powershell does't require external utilities for
   # access to the clipboard.
-  $isWinPs = $null, 'Desktop' -contains $PSVersionTable.PSEdition
+  # $isWinPs = $null, 'Desktop' -contains $PSVersionTable.PSEdition
   # Note: We don't exit right away, because do want to invoke the `It` block
   # with `-Skip` set to $True, so that the results indicated that the test
-  # was delibarately skipped.
+  # was deliberately skipped.
 
   if (-not $isWinPs) {
 
@@ -150,4 +154,9 @@ Describe MissingExternalUtilityTest {
     { 'dummy' | Set-ClipboardText 2>$null } | Should -Throw
   }
 
+}
+
+Describe 'MTA Tests' {
+  
+  It
 }

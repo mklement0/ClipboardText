@@ -95,7 +95,7 @@ Proceed?
     Remove-Item -Force -Recurse -LiteralPath $tempPublishDir
   }
 
-  Write-Verbose @"
+  Write-Verbose -Verbose @"
 Publishing succeeded. 
 Note that it can take a few minutes for the new module [version] to appear in the gallery.
 
@@ -104,7 +104,7 @@ URL: https://www.powershellgallery.com/packages/$moduleName"
 
 }
 
-task LocalPublish -alias lpub -depends _assertMasterBranch, _assertNoUntrackedFiles, Test, Commit -description 'Publish locally, to the current-user module location.' {
+task LocalPublish -alias lpub -depends Test -description 'Publish locally, to the current-user module location.' {
 
   $targetParentPath = if ($env:MK_UTIL_FOLDER_PERSONAL) {
     "$env:MK_UTIL_FOLDER_PERSONAL/Settings/PowerShell/Modules"
@@ -190,6 +190,10 @@ Proceed?
 
 task EditConfig -alias edc -description "Open the global configuration file for editing." {  
   Invoke-Item -LiteralPath $p_configPsdFile
+}
+
+task EditManifest -alias edm -description "Open the module manifest for editing." {  
+  Invoke-Item -LiteralPath "$PSScriptRoot/$(Split-Path -Leaf $PSScriptRoot).psd1"
 }
 
 #region == Internal helper tasks.

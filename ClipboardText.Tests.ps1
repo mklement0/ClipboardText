@@ -49,25 +49,20 @@ Describe StringInputTest {
 }
 
 Describe EmptyTests {
-  # !! In PSv2 (in the default MTA mode), clearing the clipboard (copying an empty string) is not supported.
-  # !! We do the next best thing and copy a *newline* instead.
-  # !! In PSv3+, Get-ClipboardText should return $null after effectively clearing the clipboard
-  # !! (both with and without -Raw, even though without -Raw you could argue that the "null collection" should be output instead).
-  $shouldBe = ($null, $nl)[$PSVersionTable.PSVersion.Major -eq 2]
+  BeforeEach {
+    'dummy' | Set-ClipboardText # make sure we start with a nonempty clipboard so we can verify that clearing is effective
+  }
   It "Not providing input effectively clears the clipboard." {
-    'dummy' | Set-ClipboardText
     Set-ClipboardText # no input
-    $shouldBe -eq (Get-ClipboardText -Raw) | Should -BeTrue
+    $null -eq (Get-ClipboardText -Raw) | Should -BeTrue
   }
   It "Passing the empty string effectively clears the clipboard." {
-    'dummy' | Set-ClipboardText
-    Set-ClipboardText -InputObject ''  # Note The PsWinV5+ Set-Clipboard reports a spurious error with '', which we mask.
-    $shouldBe -eq (Get-ClipboardText -Raw) | Should -BeTrue
+    Set-ClipboardText -InputObject ''  # Note The PsWinV5+ Set-Clipboard reports a spurious error with '', which we mask behind the scenes.
+    $null -eq (Get-ClipboardText -Raw) | Should -BeTrue
   }
   It "Passing `$null effectively clears the clipboard." {
-    'dummy' | Set-ClipboardText
     Set-ClipboardText -InputObject $null
-    $shouldBe -eq (Get-ClipboardText -Raw) | Should -BeTrue
+    $null -eq (Get-ClipboardText -Raw) | Should -BeTrue
   }
 }
 
@@ -168,6 +163,7 @@ Describe MTAtests {
 
 Describe v2Tests {
   # Invoke these tests in *WinPS v2*, which amounts to a RECURSION.
+  # Therefore, EXECUTION TAKES A WHILE.
   It "Windows PowerShell: Passes all tests in v2 as well." -Skip:(-not $isWinPs -or $PSVersionTable.PSVersion.Major -eq 2) {
     # !! An Install-Module-installed Pester is located in a version-named subfolder, which v2 cannot 
     # !! detect, so we import Pester by explicit path.

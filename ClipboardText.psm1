@@ -312,21 +312,22 @@ clipboard, ensuring that output lines are 500 characters wide.
               # To be safe, we explicitly specify that Unicode (UTF-16) be used - older platforms may default to ANSI.
               [System.Windows.Forms.Clipboard]::SetText($allText, [System.Windows.Forms.TextDataFormat]::UnicodeText)
 
-          } else {
+          } else { # $isMTA
               # -- MTA mode: Since the clipboard must be accessed in STA mode, we use a [System.Windows.Forms.TextBox] instance to mediate.
-              Write-Verbose "MTA mode: Using a [System.Windows.Forms.TextBox] instance for clipboard access."
               if ($allText.Length -eq 0) {
-                  # !! This approach cannot set the clipboard to an empty string: the text box must
-                  # !! must be *non-empty* in order to copy something. A null character doesn't work.
-                  # !! We use the least obtrusive alternative - a newline - and issue a warning.
-                  $allText = "`r`n"
-                  Write-Warning "Setting clipboard to empty string not supported in MTA mode; using newline instead."
+                # !! The [System.Windows.Forms.TextBox] approach cannot be used set the clipboard to an empty string, because a text box must
+                # !! must be *non-empty* in order to copy something. Hence we use clip.exe
+                Write-Verbose "MTA mode: Using clip.exe rather than a [System.Windows.Forms.TextBox] instance, because the empty string is to be copied."
+                $null | clip.exe
+                if ($LASTEXITCODE) { new-StatementTerminatingError 'Invoking clip.exe with $null input failed unexpectedly.' }
+              } else {
+                Write-Verbose "MTA mode: Using a [System.Windows.Forms.TextBox] instance for clipboard access."
+                $tb = New-Object System.Windows.Forms.TextBox
+                $tb.Multiline = $True
+                $tb.Text = $allText
+                $tb.SelectAll()
+                $tb.Copy()
               }
-              $tb = New-Object System.Windows.Forms.TextBox
-              $tb.Multiline = $True
-              $tb.Text = $allText
-              $tb.SelectAll()
-              $tb.Copy()
           }
 
       }

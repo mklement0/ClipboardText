@@ -66,22 +66,31 @@ task Test -alias t -description 'Run all tests via Pester.' {
 
 task UpdateChangeLog -description "Ensure that the change-log covers the current version." {
 
+  $changeLogFile = $props.Files.Changelog
+
+  # Ensure that an entry for the (new) version exists in the change-log file.
+  # If not present, add an entry *template*, containing a *placeholder*.
   ensure-ChangeLogHasEntryTemplate -Version (get-ThisModuleVersion)
 
-  $changeLogFile = "$PSScriptRoot/CHANGELOG.md"
   if (test-StillHasPlaceholders -LiteralPath $changeLogFile) {
+    # Synchronously prompt to replace the placeholder with real information.
     Write-Verbose -Verbose "Opening $changeLogFile for editing to ensure that version to be released is covered by an entry..."
     edit-Sync $changeLogFile
   }
 
   # Make sure that all placeholders were actually replaced with real information.
-  assert-ChangeLogHasNoUninstantiatedTemplates -LiteralPath ./CHANGELOG.md
+  assert-HasNoPlaceholders -LiteralPath $changeLogFile
 
 }
 
-task Publish -alias pub -depends _assertMasterBranch, _assertNoUntrackedFiles, Test, Version, UpdateChangeLog, Commit -description 'Publish to the PowerShell Gallery.' {
+task Publish -alias pub -depends _assertMasterBranch, _assertNoUntrackedFiles, Test, Version, UpdateChangeLog -description 'Publish to the PowerShell Gallery.' {
 
   $moduleVersion = get-ThisModuleVersion
+
+  Write-Verbose -Verbose 'Committing...'
+  # Use the change-log entry for the new version as the commit message.
+  iu git add --update .
+  iu git commit -m (get-ChangeLogEntry -Version $moduleVersion)
 
   # Note: 
   # We could try to assert up front that the version to be published has a higher number than
@@ -102,6 +111,7 @@ task Publish -alias pub -depends _assertMasterBranch, _assertNoUntrackedFiles, T
   # Push the tags to the origin repo.
   iu git push -f origin master --tags
 
+  # Final prompt before publishign to the PS gallery.
   assert-confirmed @"
 
 About to PUBLISH TO THE POWERSHELL GALLERY:
@@ -539,10 +549,12 @@ function copy-forPublishing {
 
 # Ensure the presence of an entry *template* for the specified version in the specified changelog file.
 function ensure-ChangeLogHasEntryTemplate {
+
   param(
-    [parameter(Mandatory=$True)] [version] $Version
-    )
-  $changeLogFile = "$PSScriptRoot/CHANGELOG.md"
+    [parameter(Mandatory)] [version] $Version
+  )
+
+  $changeLogFile = $props.Files.ChangeLog
   $content = Get-Content -Raw -LiteralPath $changeLogFile
   if ($content -match [regex]::Escape("* **v$Version**")) {
     Write-Verbose "Changelog entry for $Version is already present in $changeLogFile"
@@ -555,20 +567,21 @@ function ensure-ChangeLogHasEntryTemplate {
     # Note: We write the file as BOM-less UTF-8.    
     [IO.File]::WriteAllText((Convert-Path -LiteralPath $changeLogFile), $newContent)
   }
-  # Indicate whether the file had to be updated.
+
 }
 
+# Indicates if the specified file (still) contains placeholders (literal '???' sequences).
 function test-StillHasPlaceholders {
   param(
-    [parameter(Mandatory=$True)] [string] $LiteralPath
+    [parameter(Mandatory)] [string] $LiteralPath
   )
-  $content = Get-Content -Raw $LiteralPath
-  $content -match [regex]::Escape('???')
+  (Get-Content -Raw $LiteralPath) -match [regex]::Escape('???')
 }
 
-function assert-ChangeLogHasNoUninstantiatedTemplates {
+# Fails, if the specified file (still) contains placeholders.
+function assert-HasNoPlaceholders {
   param(
-    [parameter(Mandatory=$True)] [string] $LiteralPath
+    [Parameter(Mandatory)] [string] $LiteralPath
   )
   Assert (-not (test-StillHasPlaceholders -LiteralPath $LiteralPath)) "Aborting, because $LiteralPath still contains placeholders in lieu of real information."
 }
@@ -662,6 +675,21 @@ on your system:
   # Invoke the editor synchronously.
   & $edExe $edOpts $paths
 
+}
+
+# Extracts the change-log entry (multi-line block) for the specified version.
+function get-ChangeLogEntry {
+  param(
+    [Parameter(Mandatory)] [version] $Version
+  )
+  $changeLogFile = $props.Files.ChangeLog
+  $content = Get-Content -Raw -LiteralPath $changeLogFile
+  $entriesBlock = ($content -split '<!-- RETAIN THIS COMMENT.*?-->')[-1]
+  if ($entriesBlock -notmatch ('(?sm)' + [regex]::Escape("* **v$Version**") + '.+?(?=\r?\n' + [regex]::Escape('* **v') + ')')) {
+    Throw "Failed to extract change-long entry for version $version."
+  }
+  # Output the entry.
+  $Matches[0]
 }
 
 #endregion

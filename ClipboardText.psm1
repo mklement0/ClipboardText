@@ -6,7 +6,7 @@ IMPORTANT: THIS MODULE MUST REMAIN PSv2-COMPATIBLE.
 
 # Module-wide defaults.
 
-# !! PSv2: We dectivate even the check for accessing nonexistent variables, because
+# !! PSv2: We do not even activate the check for accessing nonexistent variables, because
 # !!       of a pitfall where parameter variables belonging to a parameter set
 # !!       other than the one selected by a given invocation are considered undefined.
 if ($PSVersionTable.PSVersion.Major -gt 2) {
@@ -67,53 +67,31 @@ Retrieves text from the clipboard as-is and saves it to file out.txt
   )
 
   $rawText = $lines = $null
-  if (test-WindowsPowerShell) { # *Windows PowerShell*
-
-    # Determine this thread's COM threading model, because the clipboard-access method
-    # must be chosen accordingly.
-    $isSTA = [threading.thread]::CurrentThread.ApartmentState.ToString() -eq 'STA'
-
-    if ($PSVersionTable.PSVersion.Major -ge 5 -and $isSTA) { # Ps*Win* v5+ has Get-Clipboard / Set-Clipboard cmdlets, but they too require STA mode.
-      
-      if ($Raw) {
-        $rawText = Get-Clipboard -Format Text -Raw
-      } else {
-        $lines = Get-Clipboard -Format Text
-      }
-
-    } else { # WinPSv4- or WinPSv5+ explicitly started with the -MTA switch
-
-      Add-Type -AssemblyName System.Windows.Forms
-      if ($isSTA) {
-          # -- STA mode:
-          Write-Verbose "STA mode: Using [Windows.Forms.Clipboard] directly."
-          # To be safe, we explicitly specify that Unicode (UTF-16) be used - older platforms may default to ANSI.
-          $rawText = [System.Windows.Forms.Clipboard]::GetText([System.Windows.Forms.TextDataFormat]::UnicodeText)
-      } else { # $isMTA
-          # -- MTA mode: Since the clipboard must be accessed in STA mode, we use a [System.Windows.Forms.TextBox] instance to mediate.
-          Write-Verbose "MTA mode: Using a [System.Windows.Forms.TextBox] instance for clipboard access."
-          $tb = New-Object System.Windows.Forms.TextBox
-          $tb.Multiline = $True
-          $tb.Paste()
-          $rawText = $tb.Text
-      }
-
+  # *Windows PowerShell* v5+ in *STA* COM threading mode (which is the default, but it can be started with -MTA)
+  if ((test-WindowsPowerShell) -and $PSVersionTable.PSVersion.Major -ge 5 -and 'STA' -eq [threading.thread]::CurrentThread.ApartmentState.ToString()) { 
+    if ($Raw) {
+      $rawText = Get-Clipboard -Format Text -Raw
+    } else {
+      $lines = Get-Clipboard -Format Text
     }
 
-  } else {  # PowerShell *Core*
+  } else {  # Windows PowerShell v4- and/or in MTA threading mode, PowerShell *Core* on any supported platform.
 
-    # No native PS support for writing to the clipboard -> external utilities
+    # No native PS support for writing to the clipboard or native support not available due to MTA mode -> external utilities
     # must be used.
+    # (Note: Attempts to use [System.Windows.Forms] proved to be brittle in MTA mode, causing intermittent failures.)
     # Since PS automatically splits external-program output into individual
     # lines and trailing empty lines can get lost in the process, we 
     # must, unfortunately, send the text to a temporary *file* and read
     # that.
 
+    $isWin = $env:OS -eq 'Windows_NT' # Note: $IsWindows is only available in PS *Core*.
+
     $tempFile = [io.path]::GetTempFileName()
 
     try {
       
-      if ($IsWindows) {
+      if ($isWin) {
         # Use an ad-hoc JScript to access the clipboard.
         # Gratefully adapted from http://stackoverflow.com/a/15747067/45375
         # Note that trying the following directly from PowerShell Core does NOT work,
@@ -146,7 +124,7 @@ f.Write(txt); f.Close();
       if ($LASTEXITCODE) { new-StatementTerminatingError "Invoking the native clipboard utility failed unexpectedly." }
 
       # Read the contents of the temp. file into a string variable.
-      if ($IsWindows) { # temp. file is UTF16-LE 
+      if ($isWin) { # temp. file is UTF16-LE 
         $rawText = [IO.File]::ReadAllText($tempFile, [Text.Encoding]::Unicode)
       } else { # temp. file is UTF8, which is the default encoding
         $rawText = [IO.File]::ReadAllText($tempFile)
@@ -287,64 +265,27 @@ clipboard, ensuring that output lines are 500 characters wide.
     $widthParamIfAny = if ($PSBoundParameters.ContainsKey('Width')) { @{ Width = $Width } } else { @{} }
     $allText = ($inputObjs | Out-String @widthParamIfAny) -replace '\r?\n\z'
 
-    if (test-WindowsPowerShell) { # *Windows PowerShell*
+    # *Windows PowerShell* v5+ in *STA* COM threading mode (which is the default, but it can be started with -MTA)
+    if ((test-WindowsPowerShell) -and $PSVersionTable.PSVersion.Major -ge 5 -and 'STA' -eq [threading.thread]::CurrentThread.ApartmentState.ToString()) { 
         
-        # Determine this thread's COM threading model, because the clipboard-access method
-        # must be chosen accordingly.
-        $isSTA = [threading.thread]::CurrentThread.ApartmentState.ToString() -eq 'STA'
-
-        if ($PSVersionTable.PSVersion.Major -ge 5 -and $isSTA) { # Ps*Win* v5+ has Get-Clipboard / Set-Clipboard cmdlets, but they too require STA mode.
-          
-          # !! As of PsWinV5.1, `Set-Clipboard ''` reports a spurious error (but still manages to effectively) clear the clipboard.
-          # !! By contrast, using `Set-Clipboard $null` succeeds.
-          Set-Clipboard -Value ($allText, $null)[$allText.Length -eq 0]
-          
-        } else { # WinPSv4- or WinPSv5+ explicitly started with the -MTA switch
-          
-          Add-Type -AssemblyName System.Windows.Forms
-          if ($isSTA) {
-              # -- STA mode: we can use [Windows.Forms.Clipboard] directly.
-              Write-Verbose "STA mode: Using [Windows.Forms.Clipboard] directly."
-              if ($allText.Length -eq 0) { 
-                # Strangely, ::SetText() breaks with an empty string, claiming $null was passed.
-                # Use of "`0" (a null char.) helps, but is awkward. We therefore simply *clear* the clipboard,
-                # which with respect to *text* should amount to the same thing.
-                [System.Windows.Forms.Clipboard]::Clear()
-              } else {
-                # To be safe, we explicitly specify that Unicode (UTF-16) be used - older platforms may default to "ANSI".
-                [System.Windows.Forms.Clipboard]::SetText($allText, [System.Windows.Forms.TextDataFormat]::UnicodeText)
-              }
-          } else { # $isMTA
-              # -- MTA mode: Since the clipboard must be accessed in STA mode, we use a [System.Windows.Forms.TextBox] instance to mediate.
-              if ($allText.Length -eq 0) {
-                # !! The [System.Windows.Forms.TextBox] approach cannot be used set the clipboard to an empty string, because a text box must
-                # !! must be *non-empty* in order to copy something. Hence we use clip.exe
-                Write-Verbose "MTA mode: Using clip.exe rather than a [System.Windows.Forms.TextBox] instance, because the empty string is to be copied."
-                $null | clip.exe
-                if ($LASTEXITCODE) { new-StatementTerminatingError 'Invoking clip.exe with $null input failed unexpectedly.' }
-              } else {
-                Write-Verbose "MTA mode: Using a [System.Windows.Forms.TextBox] instance for clipboard access."
-                $tb = New-Object System.Windows.Forms.TextBox
-                $tb.Multiline = $True
-                $tb.Text = $allText
-                $tb.SelectAll()
-                $tb.Copy()
-              }
-          }
-
-      }
+      # !! As of PsWinV5.1, `Set-Clipboard ''` reports a spurious error (but still manages to effectively) clear the clipboard.
+      # !! By contrast, using `Set-Clipboard $null` succeeds.
+      Set-Clipboard -Value ($allText, $null)[$allText.Length -eq 0]
       
-    } else { # PowerShell *Core*
+    } else { # Windows PowerShell v4- and/or in MTA threading mode, PowerShell *Core* on any supported platform.
       
-      # No native PS support for writing to the clipboard ->
+      # No native PS support for writing to the clipboard or native support not available due to MTA mode ->
       # external utilities must be used.
+      # (Note: Attempts to use [System.Windows.Forms] proved to be brittle in MTA mode, causing intermittent failures.)
+
+      $isWin = $env:OS -eq 'Windows_NT' # Note: $IsWindows is only available in PS *Core*.
 
       # To prevent adding a trailing \n, which PS inevitably adds when sending
       # a string through the pipeline to an external command, use a temp. file,
       # whose content can be provided via native input redirection (<)
       $tmpFile = [io.path]::GetTempFileName()
 
-      if ($IsWindows) {
+      if ($isWin) {
         # The clip.exe utility requires *BOM-less* UTF16-LE for full Unicode support.
         [IO.File]::WriteAllText($tmpFile, $allText, (New-Object System.Text.UnicodeEncoding $False, $False))
       } else { # $IsUnix -> use BOM-less UTF8
@@ -357,7 +298,7 @@ clipboard, ensuring that output lines are 500 characters wide.
       # platform-appropriate clipboard utility.
       try {
 
-        if ($IsWindows) {
+        if ($isWin) {
           Write-Verbose "Windows: using clip.exe"
           cmd.exe /c clip.exe '<' $tmpFile  # !! Invoke `cmd` as `cmd.exe` so as to support Pester-based `Mock`s - at least as of v4.3.1, that's a requirement; see https://github.com/pester/Pester/issues/1043
         } elseif ($IsMacOS) {

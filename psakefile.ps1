@@ -12,6 +12,7 @@ properties {
 
   $p_configPsdFile = "$HOME/.new-moduleproject.psd1"
 
+  $p_ModuleName = Split-Path -Leaf $PSScriptRoot
 }
 
 
@@ -46,10 +47,20 @@ task Test -alias t -description 'Invoke Pester to run all tests.' {
 
 }
 
-task Publish -alias pub -depends _assertMasterBranch, _assertNoUntrackedFiles, Test, Version, Commit -description 'Publish to the PowerShell Gallery.' {
+task UpdateChangeLog -description "Ensure that the change-log covers the current verion." {
 
-  $moduleName = Split-Path -Leaf $PSScriptRoot
-  $moduleVersion = [version] (Import-PowerShellDataFile "${PSScriptRoot}/${moduleName}.psd1").ModuleVersion
+  ensure-ChangeLogHasEntryTemplate -LiteralPath ./CHANGELOG.md -Version (get-ThisModuleVersion)
+
+  Write-Verbose -Verbose "Opening ./CHANGELOG for editing to ensure that version to be released is covered by an entry..."
+  edit-Sync ./CHANGELOG.md
+
+  assert-ChangeLogHasNoUninstantiatedTemplates -LiteralPath ./CHANGELOG.md
+
+}
+
+task Publish -alias pub -depends _assertMasterBranch, _assertNoUntrackedFiles, Test, Version, UpdateChangeLog, Commit -description 'Publish to the PowerShell Gallery.' {
+
+  $moduleVersion = get-ThisModuleVersion
 
   Write-Verbose -Verbose 'Creating and pushing tags...'
   # Create a tag for the new version
@@ -59,19 +70,20 @@ task Publish -alias pub -depends _assertMasterBranch, _assertNoUntrackedFiles, T
   # !! and therefore do not support prereleases. 
   # ?? However, Publish-Module does have an -AllowPrerelease switch - but it's undocumented as of 22 May 2018.
   iu git tag -f ('stable', 'pre')[[bool] $moduleVersion.PreReleaseLabel]
+
   # Push the tags to the origin repo.
   iu git push -f origin master --tags
 
   assert-confirmed @"
 About to PUBLISH TO THE POWERSHELL GALLERY:
 
-  Module:  $moduleName
+  Module:  $p_moduleName
   Version: $moduleVersion
   
   IMPORTANT: Make sure that:
     * you've run ```Invoke-psake LocalPublish`` to publish the module locally.
     * you've waited for the changes to replicate to all VMs.
-    * you've run ``Push-Location (Split-Path (Get-Module -ListAvailable $moduleName).Path); if (`$?) { Invoke-Pester }``
+    * you've run ``Push-Location (Split-Path (Get-Module -ListAvailable $p_moduleName).Path); if (`$?) { Invoke-Pester }``
       and verified that the TESTS PASS:
        * on ALL PLATFORMS and
        * on WINDOWS, both in PowerShell Core and Windows PowerShell
@@ -99,7 +111,7 @@ Proceed?
 Publishing succeeded. 
 Note that it can take a few minutes for the new module [version] to appear in the gallery.
 
-URL: https://www.powershellgallery.com/packages/$moduleName"
+URL: https://www.powershellgallery.com/packages/$p_moduleName"
 "@
 
 }
@@ -145,14 +157,16 @@ task Push -depends Commit -description 'Commit pending changes locally and push 
   iu git push origin (iu git symbolic-ref --short HEAD)
 }
 
-task Version -alias v -description 'Show or bump the module''s version number.' {
+task Version -alias ver -description 'Show or bump the module''s version number.' {
 
   $psdFile = Resolve-Path ./*.psd1
   $htModuleMetaData = Import-PowerShellDataFile -LiteralPath $psdFile
   $ver = [version] $htModuleMetaData.ModuleVersion
 
+  # Prompt for what version-number component should be incremented.
   $choices = 'Major', 'mInor', 'Patch', 'Retain', 'Abort'
   while ($True) {
+
     $ndx = read-HostChoice @"
 Current version number:
 
@@ -167,24 +181,29 @@ BUMP THE VERSION NUMBER
       $verNew = $ver
       break
     } else {
-        $verNew = increment-version $ver -Property $choices[$ndx]    
-        $ndx = read-HostChoice @"
-About to bump to NEW VERSION NUMBER:
-      
-        $ver -> $verNew
-      
-Proceed?
-"@ -Choice 'Yes', 'Revise'
+      # Confirm the resulting new version.
+      $verNew = increment-version $ver -Property $choices[$ndx]    
+      $ndx = read-HostChoice @"
+  About to bump to NEW VERSION NUMBER:
+        
+          $ver -> $verNew
+        
+  Proceed?
+"@ -Choice 'Yes', 'Revise' -DefaultChoiceIndex 0
       if ($ndx -eq 0) { 
         break
       }
     }
+
   }
 
   # Update the module manifest with the new version number.
   if ($ver -ne $verNew) {
     update-ModuleManifestVersion -Path $psdFile -ModuleVersion $verNew
   }
+
+  # Add an entry *template* for the new version to the changelog file.
+  ensure-ChangeLogHasEntryTemplate -LiteralPath ./CHANGELOG.md -Version $verNew
 
 }
 
@@ -203,7 +222,7 @@ task EditPsakeFile -alias edp -description "Open the psakefile for editing." {
 #region == Internal helper tasks.
 
 # # Playground task for quick experimentation
-task pg  {
+task _pg  {
   get-NuGetApiKey -Prompt
 }  
 
@@ -331,8 +350,8 @@ function read-HostChoice {
       [string] $Message,
       [string[]] $Choices = ('yes', 'no'),
       [switch] $NoChoicesDisplay,
-      [int] $DefaultChoiceIndex = -1, # LAST option is the default choice by default.
-      [switch] $NoDefault # no default; i.e., disallow empty input
+      [int] $DefaultChoiceIndex = -1, # LAST option is the default choice.
+      [switch] $NoDefault # no default; i.e., disallow empty/blank input
     )
 
     if ($DefaultChoiceIndex -eq -1) { $DefaultChoiceIndex = $Choices.Count - 1 }
@@ -344,9 +363,6 @@ function read-HostChoice {
       $choiceCharDict[$choiceChar] = $null
     }
     [string[]] $choiceChars = $choiceCharDict.Keys
-    # [string[]] $choiceChars = foreach ($choice in $Choices) {
-    #   $(if ($choice -cmatch '\p{Lu}') { $matches[0] } else { $choice[0] })
-    # }
 
     if (-not $NoChoicesDisplay) {
       $i = 0
@@ -454,6 +470,7 @@ function get-NuGetApiKey {
   $htConfig.NuGetApiKey
 }
 
+# Copy this project's file for publishing to the specified dir., excluding dev-only files.
 function copy-forPublishing {
   param(
     [Parameter(Mandatory)]
@@ -472,6 +489,77 @@ function copy-forPublishing {
   
   Write-Verbose -Verbose "'$($PSScriptRoot)' copied to '$LiteralPath'"
   
+}
+
+# Ensure the presence of an entry *template* for the specified version in the specified changelog file.
+function ensure-ChangeLogHasEntryTemplate {
+  param(
+    [parameter(Mandatory=$True)] [string] $LiteralPath,
+    [parameter(Mandatory=$True)] [version] $Version
+    )
+  $content = Get-Content -Raw $LiteralPath
+  if ($content -match [regex]::Escape("* **v$Version**")) {
+    Write-Verbose "Changelog entry for $Version is already present in $LiteralPath"
+  } else {
+    Write-Verbose "Adding changelog entry for $Version to $LiteralPath"
+    $parts = $content -split '(<!-- RETAIN THIS COMMENT.*?-->)'
+    if ($parts.Count -ne 3) { Throw 'Cannot find (single) marker comment in $LiteralPath' }
+    $newContent = $parts[0] + $parts[1] + "`n`n* **v$Version** ($([datetime]::now.ToString('yyyy-MM-dd'))):`n  * [???] " + $parts[2]
+    # Update the input file.
+    # Note: We write the file as BOM-less UTF-8.    
+    [IO.File]::WriteAllText((Convert-Path -LiteralPath $LiteralPath), $newContent)
+  }
+}
+
+function assert-ChangeLogHasNoUninstantiatedTemplates {
+  param(
+    [parameter(Mandatory=$True)] [string] $LiteralPath
+  )
+  $content = Get-Content -Raw $LiteralPath
+  Assert ($content -notmatch [regex]::Escape('???')) "Aborting, because $LiteralPath still contains placeholders in lieu of real information."
+}
+
+# Retrieves this module's version number from the module manifest as a [version] instance.
+function get-ThisModuleVersion {
+  [version] (Import-PowerShellDataFile "${PSScriptRoot}/${p_moduleName}.psd1").ModuleVersion
+}
+
+# Synchronously open the specified file(s) for editing.
+function edit-Sync {
+  [CmdletBinding(DefaultParameterSetName='Path')]
+  param(
+    [Parameter(ParameterSetName='Path', Mandatory=$True, Position=0)] [SupportsWildcards()] [string[]] $Path,
+    [Parameter(ParameterSetName='LiteralPath', Mandatory=$True, Position=0)] [string[]] $LiteralPath
+  )
+
+  if ($Path) {
+    $paths = Resolve-Path -EA Stop -Path $Path
+  } else {
+    $paths = Resolve-Path -EA Stop -LiteralPath $LiteralPath
+  }
+
+  # Editor executables in order of preference.
+  # Use the first one found to be installed.
+  $edExes = 'code', 'atom', 'subl', 'gedit', 'vim', 'vi'  # code == VSCode
+  $edExe = foreach ($exe in $edExes) {
+    if (Get-Command -ErrorAction Ignore $exe) { $exe; break }
+  }
+  # If no suitable editor was found and when running on Windows,
+  # see if vim.exe, installed with Git but not in $env:PATH, can be located.
+  if (-not $edExe -and ($env:OS -ne 'Windows_NT' -or -not (Test-Path ($edExe = "$env:PROGRAMFILES/Git/usr/bin/vim.exe")))) {
+    Throw "No suitable text editor for synchronous editing found."
+  }
+
+  # For VSCode, Atom, SublimeText, ensure synchronous execution in a new window.
+  # For gedit and vim / vi that is the befault behavior, so no options needed.
+  $opts = @()
+  if ($edExe -in 'code', 'atom', 'subl') {
+    $opts = '--new-window', '--wait'
+  }
+
+  # Invoke the editor synchronously.
+  & $edExe $opts $paths
+
 }
 
 #endregion

@@ -208,9 +208,6 @@ the caveats in the parameter description.
 LINUX CAVEAT: The xclip utility must be installed; on Debian-based platforms
               such as Ubuntu, install it with: sudo apt install xclip
 
-WINDOWS CAVEAT: In MTA mode, passing an empty string is not supported; 
-                a newline will be copied instead, and a warning issued.
-
 .PARAMETER Width
 For non-text input, determines the maximum output-line length.
 The default is Out-String's default, which is the current console/terminal
@@ -308,10 +305,15 @@ clipboard, ensuring that output lines are 500 characters wide.
           if ($isSTA) {
               # -- STA mode: we can use [Windows.Forms.Clipboard] directly.
               Write-Verbose "STA mode: Using [Windows.Forms.Clipboard] directly."
-              if ($allText.Length -eq 0) { $AllText = "`0" } # Strangely, SetText() breaks with an empty string, claiming $null was passed -> use a null char.
-              # To be safe, we explicitly specify that Unicode (UTF-16) be used - older platforms may default to ANSI.
-              [System.Windows.Forms.Clipboard]::SetText($allText, [System.Windows.Forms.TextDataFormat]::UnicodeText)
-
+              if ($allText.Length -eq 0) { 
+                # Strangely, ::SetText() breaks with an empty string, claiming $null was passed.
+                # Use of "`0" (a null char.) helps, but is awkward. We therefore simply *clear* the clipboard,
+                # which with respect to *text* should amount to the same thing.
+                [System.Windows.Forms.Clipboard]::Clear()
+              } else {
+                # To be safe, we explicitly specify that Unicode (UTF-16) be used - older platforms may default to "ANSI".
+                [System.Windows.Forms.Clipboard]::SetText($allText, [System.Windows.Forms.TextDataFormat]::UnicodeText)
+              }
           } else { # $isMTA
               # -- MTA mode: Since the clipboard must be accessed in STA mode, we use a [System.Windows.Forms.TextBox] instance to mediate.
               if ($allText.Length -eq 0) {

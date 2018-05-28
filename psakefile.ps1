@@ -2,25 +2,41 @@
 #       I.e., *any* PS errors - even nonterminating ones - abort execution by default.
 
 properties {
-  # Supported parameters (pass with -parameter @{ <name> = <value>[; ...] }):
-  #
-  #   SkipTest[s] / NoTest[s] ... [Boolean]; if $True, skips execution of tests
-  #   Force / Yes ... [Boolean]; skips confirmation prompts
-  #
-  $p_SkipTests = $SkipTests -or $SkipTest -or $NoTests -or $NoTest
-  $p_SkipPrompts = $Force -or $Yes
 
-  $p_configPsdFile = "$HOME/.new-moduleproject.psd1"
+  $thisModuleName = Split-Path -Leaf $PSScriptRoot
+  # A single hashtable for all script-level properies.
+  $props = @{
 
-  $p_ModuleName = Split-Path -Leaf $PSScriptRoot
+    # == Properties derived from optional parameters (passed with -parameter @{ ... })
+    # ?? Is there a way we can query all parameters passed so we can error out
+    # ?? on detecting unknown ones?
+    # Supported parameters (pass with -parameter @{ <name> = <value>[; ...] }):
+    #
+    #   SkipTest[s] / NoTest[s] ... [Boolean]; if $True, skips execution of tests
+    #   Force / Yes ... [Boolean]; skips confirmation prompts
+    #
+    SkipTests = $SkipTests -or $SkipTest -or $NoTests -or $NoTest
+    SkipPrompts = $Force -or $Yes
+
+    # == Internally used / derived properties.
+    ModuleName = $thisModuleName
+    Files = @{
+      GlobalConfig = "$HOME/.new-moduleproject.config.psd1"
+      Manifest = "$thisModuleName.psd1"
+      ChangeLog = "$PSScriptRoot/CHANGELOG.md"
+      ReadMe = "$PSScriptRoot/README.md"
+      License = "$PSScriptRoot/LICENSE.md"
+    }
+
+  } # $props
 }
 
 
-
-# If no task is passed, list the available tasks. 
+# If no task is passed, list all defined (public) tasks. 
 task default -depends ListTasks
 
 task ListTasks -alias l -description 'List all defined tasks.' {
+
   # !! Ideally, we'd just pass through to -docs, but as of psake v4.7.0 on
   # !! PowerShell Core v6.1.0-preview on at least macOS, the formatting is broken.
   # !! Sadly, -docs use Format-* cmdlets behind the scenes, so we cannot
@@ -37,26 +53,28 @@ task ListTasks -alias l -description 'List all defined tasks.' {
       }
     }
   } | Out-String | Write-Host -ForegroundColor Green
+
 }
 
-task Test -alias t -description 'Invoke Pester to run all tests.' {
+task Test -alias t -description 'Run all tests via Pester.' {
   
-  if ($p_SkipTests) { Write-Verbose -Verbose 'Skipping tests, as requested.'; return }
+  if ($props.SkipTests) { Write-Verbose -Verbose 'Skipping tests, as requested.'; return }
   
   Assert ((Invoke-Pester -PassThru).FailedCount -eq 0) "Aborting, because at least one test failed."
 
 }
 
-task UpdateChangeLog -description "Ensure that the change-log covers the current verion." {
+task UpdateChangeLog -description "Ensure that the change-log covers the current version." {
 
-  ensure-ChangeLogHasEntryTemplate -LiteralPath ./CHANGELOG.md -Version (get-ThisModuleVersion)
+  ensure-ChangeLogHasEntryTemplate -Version (get-ThisModuleVersion)
 
-  if (test-ChangeLogHasUninstantiatedTemplates -LiteralPath ./CHANGELOG.md) {
-    Write-Verbose -Verbose "Opening ./CHANGELOG for editing to ensure that version to be released is covered by an entry..."
-    edit-Sync ./CHANGELOG.md
+  $changeLogFile = "$PSScriptRoot/CHANGELOG.md"
+  if (test-StillHasPlaceholders -LiteralPath $changeLogFile) {
+    Write-Verbose -Verbose "Opening $changeLogFile for editing to ensure that version to be released is covered by an entry..."
+    edit-Sync $changeLogFile
   }
 
-  # Make sure that 
+  # Make sure that all placeholders were actually replaced with real information.
   assert-ChangeLogHasNoUninstantiatedTemplates -LiteralPath ./CHANGELOG.md
 
 }
@@ -65,6 +83,12 @@ task Publish -alias pub -depends _assertMasterBranch, _assertNoUntrackedFiles, T
 
   $moduleVersion = get-ThisModuleVersion
 
+  # Note: 
+  # We could try to assert up front that the version to be published has a higher number than
+  # the currently published one, with `(Find-Module $props.ModuleName).Version`.
+  # It can be a tad slow, however. For now we rely on Publish-Module to fail if the condition 
+  # is not met. (Does it fail with a meaningful error message?)
+
   Write-Verbose -Verbose 'Creating and pushing tags...'
   # Create a tag for the new version
   iu git tag -f -a -m "Version $moduleVersion" "v$moduleVersion"
@@ -72,21 +96,23 @@ task Publish -alias pub -depends _assertMasterBranch, _assertNoUntrackedFiles, T
   # !! As of PowerShell Core v6.1.0-preview.2, PowerShell module manifests only support [version] instances
   # !! and therefore do not support prereleases. 
   # ?? However, Publish-Module does have an -AllowPrerelease switch - but it's undocumented as of 22 May 2018.
-  iu git tag -f ('stable', 'pre')[[bool] $moduleVersion.PreReleaseLabel]
+  $isPrerelease = $False
+  iu git tag -f ('stable', 'pre')[$isPrerelease]
 
   # Push the tags to the origin repo.
   iu git push -f origin master --tags
 
   assert-confirmed @"
+
 About to PUBLISH TO THE POWERSHELL GALLERY:
 
-  Module:  $p_moduleName
+  Module:  $($props.moduleName)
   Version: $moduleVersion
   
   IMPORTANT: Make sure that:
-    * you've run ```Invoke-psake LocalPublish`` to publish the module locally.
+    * you've run ``Invoke-psake LocalPublish`` to publish the module locally.
     * you've waited for the changes to replicate to all VMs.
-    * you've run ``Push-Location (Split-Path (Get-Module -ListAvailable $p_moduleName).Path); if (`$?) { Invoke-Pester }``
+    * you've run ``Push-Location (Split-Path (Get-Module -ListAvailable $($props.moduleName)).Path); if (`$?) { Invoke-Pester }``
       and verified that the TESTS PASS:
        * on ALL PLATFORMS and
        * on WINDOWS, both in PowerShell Core and Windows PowerShell
@@ -102,7 +128,7 @@ Proceed?
   $tempPublishDir = Join-Path ([io.Path]::GetTempPath()) "${PID}/${p_moduleName}"
   $null = New-Item -ItemType Directory -Path $tempPublishDir
 
-  copy-forPublishing -LiteralPath $tempPublishDir
+  copy-forPublishing -DestinationPath $tempPublishDir
 
   try {
     # Note: -Repository PSGallery is implied.
@@ -112,10 +138,12 @@ Proceed?
   }
 
   Write-Verbose -Verbose @"
-Publishing succeeded. 
+
+PUBLISHING SUCCEEDED.
+
 Note that it can take a few minutes for the new module [version] to appear in the gallery.
 
-URL: https://www.powershellgallery.com/packages/$p_moduleName"
+URL: https://www.powershellgallery.com/packages/$($props.moduleName)"
 "@
 
 }
@@ -132,6 +160,7 @@ task LocalPublish -alias lpub -depends Test -description 'Publish locally, to th
 
   # Make sure the user confirms the intent.
   assert-confirmed @"
+
 About to PUBLISH LOCALLY to:
 
   $targetPath
@@ -141,7 +170,7 @@ which will REPLACE the existing folder's content, if present.
 Proceed?
 "@
 
-  copy-forPublishing -LiteralPath $targetPath
+  copy-forPublishing -DestinationPath $targetPath
 
 }
 
@@ -163,63 +192,70 @@ task Push -depends Commit -description 'Commit pending changes locally and push 
 
 task Version -alias ver -description 'Show or bump the module''s version number.' {
 
-  $psdFile = Resolve-Path ./*.psd1
-  $htModuleMetaData = Import-PowerShellDataFile -LiteralPath $psdFile
+  $htModuleMetaData = Import-PowerShellDataFile -LiteralPath $props.Files.Manifest
   $ver = [version] $htModuleMetaData.ModuleVersion
 
-  # Prompt for what version-number component should be incremented.
-  $choices = 'Major', 'mInor', 'Patch', 'Retain', 'Abort'
-  while ($True) {
+  Write-Host @"
+  
+  CURRENT version number:
+  
+  $ver
+"@
 
-    $ndx = read-HostChoice @"
-Current version number:
+  if (-not $props.SkipPrompts) {
 
-    $ver
-
-BUMP THE VERSION NUMBER
-"@ -Choices $choices
-
-    Assert ($ndx -ne $choices.count -1) 'Aborted by user request.'
-    if ($ndx -eq $choices.count -2) {
-      Write-Warning "Retaining existing version $ver, as requested."
-      $verNew = $ver
-      break
-    } else {
-      # Confirm the resulting new version.
-      $verNew = increment-version $ver -Property $choices[$ndx]    
+    # Prompt for what version-number component should be incremented.
+    $choices = 'Major', 'mInor', 'Patch', 'Retain', 'Abort'
+    while ($True) {
+  
       $ndx = read-HostChoice @"
-  About to bump to NEW VERSION NUMBER:
-        
-          $ver -> $verNew
-        
-  Proceed?
-"@ -Choice 'Yes', 'Revise' -DefaultChoiceIndex 0
-      if ($ndx -eq 0) { 
+  
+  BUMP THE VERSION NUMBER
+"@ -Choices $choices
+  
+      Assert ($ndx -ne $choices.count -1) 'Aborted by user request.'
+      if ($ndx -eq $choices.count -2) {
+        Write-Warning "Retaining existing version $ver, as requested."
+        $verNew = $ver
         break
+      } else {
+        # Prompt to confirm the resulting new version.
+        $verNew = increment-version $ver -Property $choices[$ndx]    
+        $ndx = read-HostChoice @"
+    Confirm the NEW VERSION NUMBER:
+          
+            $ver -> $verNew
+          
+    Proceed?
+"@ -Choice 'Yes', 'Revise' -DefaultChoiceIndex 0
+        if ($ndx -eq 0) { 
+          break
+        }
       }
+  
+    }
+  
+    # Update the module manifest with the new version number.
+    if ($ver -ne $verNew) {
+      update-ModuleManifestVersion -Path $props.Files.Manifest -ModuleVersion $verNew
     }
 
-  }
+    # Add an entry *template* for the new version to the changelog file.
+    ensure-ChangeLogHasEntryTemplate -Version $verNew
 
-  # Update the module manifest with the new version number.
-  if ($ver -ne $verNew) {
-    update-ModuleManifestVersion -Path $psdFile -ModuleVersion $verNew
   }
-
-  # Add an entry *template* for the new version to the changelog file.
-  ensure-ChangeLogHasEntryTemplate -LiteralPath ./CHANGELOG.md -Version $verNew
 
 }
 
 task EditConfig -alias edc -description "Open the global configuration file for editing." {  
-  Invoke-Item -LiteralPath $p_configPsdFile
+  Invoke-Item -LiteralPath $props.Files.GlobalConfig
 }
 
 task EditManifest -alias edm -description "Open the module manifest for editing." {  
-  Invoke-Item -LiteralPath "$PSScriptRoot/$(Split-Path -Leaf $PSScriptRoot).psd1"
+  Invoke-Item -LiteralPath $props.Files.Manifest
 }
 
-task EditPsakeFile -alias edp -description "Open the psakefile for editing." {  
+task EditPsakeFile -alias edp -description "Open this psakefile for editing." {  
   Invoke-Item -LiteralPath $PSCommandPath
 }
 
@@ -250,7 +286,7 @@ function assert-confirmed {
     [string] $Message
   )
 
-  if ($p_SkipPrompts) { Write-Verbose -Verbose 'Bypassing confirmation prompts, as requested.'; return }
+  if ($props.SkipPrompts) { Write-Verbose -Verbose 'Bypassing confirmation prompts, as requested.'; return }
 
   Assert (0 -eq (read-HostChoice $Message -Choices 'yes', 'abort')) 'Aborted by user request.'
 
@@ -420,12 +456,14 @@ function update-ModuleManifestVersion {
   $lines -replace '^(\s*ModuleVersion\s*=).*', ('$1 ''{0}''' -f $Version) | Set-Content -Encoding ascii $LiteralPath
 }
 
-function get-settings {
-  if (-not (Test-Path $p_configPsdFile)) {
-    Write-Warning "Settings file not found: $p_configPsdFile"
+# Reads the global config (settings) and returns the settings as a hashtable.
+# Note: Analogous to use in Git, "global" refers to *current-user-global* settings.
+function get-GlobalConfig {
+  if (-not (Test-Path $props.Files.globalConfig)) {
+    Write-Warning "No global settings filefound: $($props.Files.GlobalConfig)"
     @{}
   } else {
-    Import-PowerShellDataFile -LiteralPath $p_configPsdFile
+    Import-PowerShellDataFile -LiteralPath $props.Files.globalConfig
   }
 }
 
@@ -433,11 +471,14 @@ function get-NuGetApiKey {
   param(
     [switch] $Prompt
   )
-  
-  $htConfig = get-settings
+
+  # Read the user's global configuration.
+  $htConfig = get-GlobalConfig
   
   if ($Prompt -or -not $htConfig.NuGetApiKey) {
-    $configPsdFile = $p_configPsdFile
+
+    # Prompt the user.
+    $configPsdFile = $props.Files.globalConfig
     # e.g. 5ecf36c5-437f-0123-7654-c91df8f79ca4
     $regex = '^[a-z0-9]{8}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{12}$'
     while ($true) {
@@ -446,8 +487,8 @@ function get-NuGetApiKey {
       Write-Warning "Invalid key specified; a vaid key must match regex '$regex'. Please try again."
     }
 
-    # Update the settings file.
-    if (-not (Test-Path -LiteralPath $configPsdFile)) { # create 
+    # Update  or create the config file.
+    if (-not (Test-Path -LiteralPath $configPsdFile)) { # create on demand.
 @"
 <#
   Global configuration file for PowerShell module projects created with New-ModuleProject
@@ -469,8 +510,9 @@ function get-NuGetApiKey {
     }
 
     $htConfig.NuGetApiKey = $nuGetApiKey
-  }
+  } # if
 
+  # Outptut the key.
   $htConfig.NuGetApiKey
 }
 
@@ -478,45 +520,45 @@ function get-NuGetApiKey {
 function copy-forPublishing {
   param(
     [Parameter(Mandatory)]
-    [string] $LiteralPath
+    [string] $DestinationPath
   )
 
   # Create the target folder or, if it already exists, remove its *contents*.
-  if (Test-Path -LiteralPath $LiteralPath) {
-    Remove-Item -Force -Recurse -Path $LiteralPath/*
+  if (Test-Path -LiteralPath $DestinationPath) {
+    Remove-Item -Force -Recurse -Path $DestinationPath/*
   } else {
-    New-Item -ItemType Directory -Path $LiteralPath
+    New-Item -ItemType Directory -Path $DestinationPath
   }
 
-  # Copy this folder's contents recursively, but exclude the .git subfolder, the .gitignore file, and the psake "make file".
-  Copy-Item -Recurse -Path "$($PSScriptRoot)/*" -Destination $LiteralPath -Exclude '.git', '.gitignore', 'psakefile.ps1'
+  # Copy this folder's contents recursively, but exclude the .git subfolder, the .gitignore file, and the psakefile.
+  Copy-Item -Recurse -Path "$($PSScriptRoot)/*" -Destination $DestinationPath -Exclude '.git', '.gitignore', 'psakefile.ps1'
   
-  Write-Verbose -Verbose "'$($PSScriptRoot)' copied to '$LiteralPath'"
+  Write-Verbose -Verbose "'$PSScriptRoot' copied to '$DestinationPath'"
   
 }
 
 # Ensure the presence of an entry *template* for the specified version in the specified changelog file.
 function ensure-ChangeLogHasEntryTemplate {
   param(
-    [parameter(Mandatory=$True)] [string] $LiteralPath,
     [parameter(Mandatory=$True)] [version] $Version
     )
-  $content = Get-Content -Raw $LiteralPath
+  $changeLogFile = "$PSScriptRoot/CHANGELOG.md"
+  $content = Get-Content -Raw -LiteralPath $changeLogFile
   if ($content -match [regex]::Escape("* **v$Version**")) {
-    Write-Verbose "Changelog entry for $Version is already present in $LiteralPath"
+    Write-Verbose "Changelog entry for $Version is already present in $changeLogFile"
   } else {
-    Write-Verbose "Adding changelog entry for $Version to $LiteralPath"
+    Write-Verbose "Adding changelog entry for $Version to $changeLogFile"
     $parts = $content -split '(<!-- RETAIN THIS COMMENT.*?-->)'
-    if ($parts.Count -ne 3) { Throw 'Cannot find (single) marker comment in $LiteralPath' }
+    if ($parts.Count -ne 3) { Throw 'Cannot find (single) marker comment in $changeLogFile' }
     $newContent = $parts[0] + $parts[1] + "`n`n* **v$Version** ($([datetime]::now.ToString('yyyy-MM-dd'))):`n  * [???] " + $parts[2]
     # Update the input file.
     # Note: We write the file as BOM-less UTF-8.    
-    [IO.File]::WriteAllText((Convert-Path -LiteralPath $LiteralPath), $newContent)
+    [IO.File]::WriteAllText((Convert-Path -LiteralPath $changeLogFile), $newContent)
   }
   # Indicate whether the file had to be updated.
 }
 
-function test-ChangeLogHasUninstantiatedTemplates {
+function test-StillHasPlaceholders {
   param(
     [parameter(Mandatory=$True)] [string] $LiteralPath
   )
@@ -528,17 +570,17 @@ function assert-ChangeLogHasNoUninstantiatedTemplates {
   param(
     [parameter(Mandatory=$True)] [string] $LiteralPath
   )
-  $content = Get-Content -Raw $LiteralPath
-  Assert (-not (test-ChangeLogHasUninstantiatedTemplates -LiteralPath $LiteralPath)) "Aborting, because $LiteralPath still contains placeholders in lieu of real information."
+  Assert (-not (test-StillHasPlaceholders -LiteralPath $LiteralPath)) "Aborting, because $LiteralPath still contains placeholders in lieu of real information."
 }
 
 # Retrieves this module's version number from the module manifest as a [version] instance.
 function get-ThisModuleVersion {
-  [version] (Import-PowerShellDataFile "${PSScriptRoot}/${p_moduleName}.psd1").ModuleVersion
+  [version] (Import-PowerShellDataFile $props.Files.Manifest).ModuleVersion
 }
 
 # Synchronously open the specified file(s) for editing.
 function edit-Sync {
+
   [CmdletBinding(DefaultParameterSetName='Path')]
   param(
     [Parameter(ParameterSetName='Path', Mandatory=$True, Position=0)] [SupportsWildcards()] [string[]] $Path,
@@ -551,27 +593,74 @@ function edit-Sync {
     $paths = Resolve-Path -EA Stop -LiteralPath $LiteralPath
   }
 
-  # Editor executables in order of preference.
-  # Use the first one found to be installed.
-  $edExes = 'code', 'atom', 'subl', 'gedit', 'vim', 'vi'  # code == VSCode
-  $edExe = foreach ($exe in $edExes) {
-    if (Get-Command -ErrorAction Ignore $exe) { $exe; break }
-  }
-  # If no suitable editor was found and when running on Windows,
-  # see if vim.exe, installed with Git but not in $env:PATH, can be located.
-  if (-not $edExe -and ($env:OS -ne 'Windows_NT' -or -not (Test-Path ($edExe = "$env:PROGRAMFILES/Git/usr/bin/vim.exe")))) {
-    Throw "No suitable text editor for synchronous editing found."
+  # RESPECT THE EDITOR CONFIGURED FOR GIT.
+  $edCmdLinePrefix = git config core.editor # Note: $LASTEXITCODE will be 1 if no editor is defined.
+  # Note: the editor may be defined as an executable *plus options*, such as `code -n -w`.
+  $edExe, $edOpts = -split $edCmdLinePrefix
+  if (-not $edExe) { # If none is explicitly configured, FALL BACK TO GIT'S DEFAULT.
+    # Check env. variables.
+    $edExe = foreach ($envVarVal in $env:EDITOR, $env:VISUAL) {
+      if ($envVarVal) { $envVarVal; break }
+    }
+    # Look for gedit, vim, vi
+    # Note: Git will only use `gedit` by default if that default is compiled into Git's binary.
+    #       This is the case on Ubuntu, for instance.
+    #       !! Therefore, it's possible for us to end up using a different editor than Git, such as on Fedora.
+    $edExe = foreach ($exe in 'gedit', 'vim', 'vi') {
+      if (Get-Command -ErrorAction Ignore $exe) { $exe; break }
+    }
+    # If no suitable editor was found and when running on Windows,
+    # see if vim.exe, installed with Git but not present in $env:PATH, can be located, as a last resort.
+    if (-not $edExe -and ($env:OS -ne 'Windows_NT' -or -not (Test-Path ($edExe = "$env:PROGRAMFILES/Git/usr/bin/vim.exe")))) {
+      # We give up.
+      Throw "No suitable text editor for synchronous editing found."
+    }
+    # Notify the user that no "friendly" editor is configured.
+    # TODO: We could offer to perform this configuration by prompting the user
+    #       to choose one of the installed editors, if present.
+    Write-Warning @"
+
+NO "FRIENDLY" TEXT EDITOR IS CONFIGURED FOR GIT.
+
+To define one, use one of the following commands, depending on what's available
+on your system:
+
+* Visual Studio Code:
+
+  git config --global core.editor 'code -n -w'
+  
+* Atom:
+
+  git config --global core.editor 'atom -n -w'
+
+* Sublime Text:
+
+  git config --global core.editor 'subl -n -w'
+
+"@    
   }
 
-  # For VSCode, Atom, SublimeText, ensure synchronous execution in a new window.
-  # For gedit and vim / vi that is the befault behavior, so no options needed.
-  $opts = @()
-  if ($edExe -in 'code', 'atom', 'subl') {
-    $opts = '--new-window', '--wait'
-  }
+  # # Editor executables in order of preference.
+  # # Use the first one found to be installed.
+  # $edExes = 'code', 'atom', 'subl', 'gedit', 'vim', 'vi'  # code == VSCode
+  # $edExe = foreach ($exe in $edExes) {
+  #   if (Get-Command -ErrorAction Ignore $exe) { $exe; break }
+  # }
+  # # If no suitable editor was found and when running on Windows,
+  # # see if vim.exe, installed with Git but not in $env:PATH, can be located.
+  # if (-not $edExe -and ($env:OS -ne 'Windows_NT' -or -not (Test-Path ($edExe = "$env:PROGRAMFILES/Git/usr/bin/vim.exe")))) {
+  #   Throw "No suitable text editor for synchronous editing found."
+  # }
+
+  # # For VSCode, Atom, SublimeText, ensure synchronous execution in a new window.
+  # # For gedit and vim / vi that is the befault behavior, so no options needed.
+  # $opts = @()
+  # if ($edExe -in 'code', 'atom', 'subl') {
+  #   $opts = '--new-window', '--wait'
+  # }
 
   # Invoke the editor synchronously.
-  & $edExe $opts $paths
+  & $edExe $edOpts $paths
 
 }
 

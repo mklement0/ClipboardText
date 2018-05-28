@@ -51,9 +51,12 @@ task UpdateChangeLog -description "Ensure that the change-log covers the current
 
   ensure-ChangeLogHasEntryTemplate -LiteralPath ./CHANGELOG.md -Version (get-ThisModuleVersion)
 
-  Write-Verbose -Verbose "Opening ./CHANGELOG for editing to ensure that version to be released is covered by an entry..."
-  edit-Sync ./CHANGELOG.md
+  if (test-ChangeLogHasUninstantiatedTemplates -LiteralPath ./CHANGELOG.md) {
+    Write-Verbose -Verbose "Opening ./CHANGELOG for editing to ensure that version to be released is covered by an entry..."
+    edit-Sync ./CHANGELOG.md
+  }
 
+  # Make sure that 
   assert-ChangeLogHasNoUninstantiatedTemplates -LiteralPath ./CHANGELOG.md
 
 }
@@ -509,6 +512,15 @@ function ensure-ChangeLogHasEntryTemplate {
     # Note: We write the file as BOM-less UTF-8.    
     [IO.File]::WriteAllText((Convert-Path -LiteralPath $LiteralPath), $newContent)
   }
+  # Indicate whether the file had to be updated.
+}
+
+function test-ChangeLogHasUninstantiatedTemplates {
+  param(
+    [parameter(Mandatory=$True)] [string] $LiteralPath
+  )
+  $content = Get-Content -Raw $LiteralPath
+  $content -match [regex]::Escape('???')
 }
 
 function assert-ChangeLogHasNoUninstantiatedTemplates {
@@ -516,7 +528,7 @@ function assert-ChangeLogHasNoUninstantiatedTemplates {
     [parameter(Mandatory=$True)] [string] $LiteralPath
   )
   $content = Get-Content -Raw $LiteralPath
-  Assert ($content -notmatch [regex]::Escape('???')) "Aborting, because $LiteralPath still contains placeholders in lieu of real information."
+  Assert (-not (test-ChangeLogHasUninstantiatedTemplates -LiteralPath $LiteralPath)) "Aborting, because $LiteralPath still contains placeholders in lieu of real information."
 }
 
 # Retrieves this module's version number from the module manifest as a [version] instance.

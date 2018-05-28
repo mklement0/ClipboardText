@@ -107,9 +107,8 @@ Proceed?
     # Note: -Repository PSGallery is implied.
     Publish-Module -Path $tempPublishDir -NuGetApiKey (get-NuGetApiKey)
   } finally {
-push-location $tempPublishDir
-exit 5 # ???    
-    Remove-Item -Force -Recurse -LiteralPath $tempPublishDir
+push-location $tempPublishDir #???
+#???    Remove-Item -Force -Recurse -LiteralPath $tempPublishDir
   }
 
   Write-Verbose -Verbose @"

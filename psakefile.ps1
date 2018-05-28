@@ -100,7 +100,7 @@ Proceed?
   # pending - see https://github.com/PowerShell/PowerShellGet/issues/191
   # IMPORTANT: For publishing to succeed, the temp. dir.'s name must match the module's.
   $tempPublishDir = Join-Path ([io.Path]::GetTempPath()) "${PID}/${p_moduleName}"
-  New-Item -ItemType Directory -Path $tempPublishDir
+  $null = New-Item -ItemType Directory -Path $tempPublishDir
 
   copy-forPublishing -LiteralPath $tempPublishDir
 

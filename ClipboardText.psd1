@@ -1,4 +1,4 @@
-# Module manifest - USE ONLY ASCII CHARACTER IN THIS FILE
+# Module manifest - save as BOM-less UTF-8 and USE ONLY ASCII CHARACTER IN THIS FILE
 @{
 
 # Script module or binary module file associated with this manifest.
@@ -56,4 +56,3 @@ PrivateData = @{
 } # End of PrivateData hashtable
 
 }
-

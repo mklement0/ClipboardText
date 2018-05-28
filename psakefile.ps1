@@ -98,7 +98,7 @@ Proceed?
   # the .git folder and other files not relevant at runtime can be EXCLUDED.
   # A feature request to have Publish-Module support exclusions directly is
   # pending - see https://github.com/PowerShell/PowerShellGet/issues/191
-  $tempPublishDir = "$([io.Path]::GetTempPath())/${PID}/${moduleName}"
+  $tempPublishDir = Join-Path ([io.Path]::GetTempPath()) "${PID}/${moduleName}"
   New-Item -ItemType Directory -Path $tempPublishDir
 
   copy-forPublishing -LiteralPath $tempPublishDir
@@ -107,6 +107,8 @@ Proceed?
     # Note: -Repository PSGallery is implied.
     Publish-Module -Path $tempPublishDir -NuGetApiKey (get-NuGetApiKey)
   } finally {
+push-location $tempPublishDir
+exit 5 # ???    
     Remove-Item -Force -Recurse -LiteralPath $tempPublishDir
   }
 

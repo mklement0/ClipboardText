@@ -11,6 +11,7 @@ for **copying text to and retrieving text from the system clipboard**, via the `
 It is useful in the following **scenarios**:
 
 * **Use with PowerShell _Core_ on (hopefully) all supported platforms.**
+
   * As of v6.1, PowerShell Core doesn't ship with clipboard cmdlets.
   * This module fills this gap, albeit only with respect to _text_.  
   * The implementation relies on external utilities (command-line programs) on all supported platforms:

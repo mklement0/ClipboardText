@@ -43,8 +43,13 @@ output individually.
 This function is a "polyfill" to make up for the lack of built-in clipboard
 support in Windows Powershell v5.0- and in PowerShell Core as of v6.1, 
 albeit only with respect to text.
-In Windows PowerShell v5.1+, you can use the built-in Get-Clipboard cmdlet
+
+In Windows PowerShell v5+, you can use the built-in Get-Clipboard cmdlet
 instead (which this function invokes, if available).
+
+In earlier versions, a helper type is compiled on demand that uses the
+Windows API. Note that this means the first invocation of this function
+in a given session will be noticeably slower, due to the on-demand compilation.
 
 .EXAMPLE
 Get-ClipboardText | ForEach-Object { $i=0 } { '#{0}: {1}' -f (++$i), $_ }
@@ -69,6 +74,8 @@ Retrieves text from the clipboard as-is and saves it to file out.txt
   $rawText = $lines = $null
   # *Windows PowerShell* v5+ in *STA* COM threading mode (which is the default, but it can be started with -MTA)
   if ((test-WindowsPowerShell) -and $PSVersionTable.PSVersion.Major -ge 5 -and 'STA' -eq [threading.thread]::CurrentThread.ApartmentState.ToString()) { 
+
+    Write-Verbose "Windows (PSv5+ in STA mode): deferring to Get-Clipboard"
     if ($Raw) {
       $rawText = Get-Clipboard -Format Text -Raw
     } else {
@@ -87,53 +94,50 @@ Retrieves text from the clipboard as-is and saves it to file out.txt
 
     $isWin = $env:OS -eq 'Windows_NT' # Note: $IsWindows is only available in PS *Core*.
 
-    $tempFile = [io.path]::GetTempFileName()
+    if ($isWin) {
 
-    try {
-      
-      if ($isWin) {
-        # Use an ad-hoc JScript to access the clipboard.
-        # Gratefully adapted from http://stackoverflow.com/a/15747067/45375
-        # Note that trying the following directly from PowerShell Core does NOT work,
-        #   (New-Object -ComObject htmlfile).parentWindow.clipboardData.getData('text')
-        # because .parentWindow is always $null in *older* PS versions, e.g. in v2.
-        # Passing true as the last argument to .CreateTextFile() creates a UTF16-LE file (with BOM).
-        $tempScript = [io.path]::GetTempFileName()
-        @"
-var txt = WSH.CreateObject('htmlfile').parentWindow.clipboardData.getData('text'); 
-var f = WSH.CreateObject('Scripting.FileSystemObject').CreateTextFile('$($tempFile -replace "\\", "\\")', true, true);
-f.Write(txt); f.Close();
-"@ | Set-content -Encoding ASCII -LiteralPath $tempScript
-        cscript /nologo /e:JScript $tempScript
-        Remove-Item $tempScript
-      } elseif ($IsMacOS) {
+      Write-Verbose "Windows: using WinAPI via helper type"
 
-        # Note: For full robustness, using the full path to sh, '/bin/sh' is preferable, but then 
-        #       we couldn't use mock functions to override the command for testing.
-        sh -c "pbpaste > '$tempFile'"
+      # Note: Originally we used a WSH-based solution a la http://stackoverflow.com/a/15747067/45375,
+      #       but WSH may be blocked on some systems for security reasons.
+      add-WinApiHelperType
 
-      } else { # $IsLinux
+      $rawText = [net.same2u.util.Clipboard]::GetText()
 
-        # Note: Requires xclip, which is not installed by default on most Linux distros
-        #       and works with freedesktop.org-compliant, X11 desktops.
-        sh -c "xclip -selection clipboard -out > '$tempFile'"
-        if ($LASTEXITCODE -eq 127) { new-StatementTerminatingError "xclip is not installed; please install it via your platform's package manager; e.g., on Debian-based distros such as Ubuntu: sudo apt install xclip" }
+    } else {
 
-      }
-      
-      if ($LASTEXITCODE) { new-StatementTerminatingError "Invoking the native clipboard utility failed unexpectedly." }
+      $tempFile = [io.path]::GetTempFileName()
 
-      # Read the contents of the temp. file into a string variable.
-      if ($isWin) { # temp. file is UTF16-LE 
-        $rawText = [IO.File]::ReadAllText($tempFile, [Text.Encoding]::Unicode)
-      } else { # temp. file is UTF8, which is the default encoding
+      try {
+        
+        if ($IsMacOS) {
+          Write-Verbose "macOS: using pbpaste"
+
+          # Note: For full robustness, using the full path to sh, '/bin/sh' is preferable, but then 
+          #       we couldn't use mock functions to override the command for testing.
+          sh -c "pbpaste > '$tempFile'"
+
+        } else { # $IsLinux
+
+          Write-Verbose "Linux: using xclip"
+
+          # Note: Requires xclip, which is not installed by default on most Linux distros
+          #       and works with freedesktop.org-compliant, X11 desktops.
+          sh -c "xclip -selection clipboard -out > '$tempFile'"
+          if ($LASTEXITCODE -eq 127) { new-StatementTerminatingError "xclip is not installed; please install it via your platform's package manager; e.g., on Debian-based distros such as Ubuntu: sudo apt install xclip" }
+
+        }
+        
+        if ($LASTEXITCODE) { new-StatementTerminatingError "Invoking the native clipboard utility failed unexpectedly." }
+
+        # Read the contents of the temp. file into a string variable.
+        # Temp. file is UTF8, which is the default encoding
         $rawText = [IO.File]::ReadAllText($tempFile)
+
+      } finally {
+        Remove-Item $tempFile
       }
-
-    } finally {
-      Remove-Item $tempFile
-    }
-
+    } # -not $isWin
   }
 
   # Output the retrieved text
@@ -302,7 +306,7 @@ clipboard, ensuring that output lines are 500 characters wide.
           Write-Verbose "Windows: using clip.exe"
           cmd.exe /c clip.exe '<' $tmpFile  # !! Invoke `cmd` as `cmd.exe` so as to support Pester-based `Mock`s - at least as of v4.3.1, that's a requirement; see https://github.com/pester/Pester/issues/1043
         } elseif ($IsMacOS) {
-          Write-Verbose "macOS: Using pbcopy"
+          Write-Verbose "macOS: using pbcopy"
           sh -c "pbcopy < '$tmpFile'"
         } else { # $IsLinux
           Write-Verbose "Linux: using xclip"
@@ -345,6 +349,32 @@ function test-WindowsPowerShell {
   # !! $IsCoreCLR is not available in Windows PowerShell and, if
   # !! Set-StrictMode is set, trying to access it would fail.
   $null, 'Desktop' -contains $PSVersionTable.PSEdition 
+}
+
+# Adds helper type [net.same2u.util.Clipboard] for clipboard access via the 
+# Windows API.
+# Note: It is fine to blindly call this function repeatedly - after the initial
+#       performance hit due to compilation, subsequent invocations are very fast.
+function add-WinApiHelperType {
+  Add-Type -Name Clipboard -Namespace net.same2u.util -MemberDefinition @'
+  [DllImport("user32.dll", SetLastError=true)]
+  static extern bool OpenClipboard(IntPtr hWndNewOwner);
+  [DllImport("user32.dll", SetLastError = true)]
+  static extern IntPtr GetClipboardData(uint uFormat);
+  [DllImport("user32.dll", SetLastError=true)]
+  static extern bool CloseClipboard();
+  
+  public static string GetText() {
+    string txt = null;
+    if (!OpenClipboard(IntPtr.Zero)) { throw new Exception("Failed to open clipboard."); }
+    IntPtr handle = GetClipboardData(13); // CF_UnicodeText
+    if (handle != IntPtr.Zero) { // if no handle is returned, assume that no text was on the clipboard.
+      txt = Marshal.PtrToStringAuto(handle);
+    }
+    if (!CloseClipboard()) { throw new Exception("Failed to close clipboard."); }
+    return txt;
+  }
+'@
 }
 
 #endregion

@@ -4,6 +4,10 @@ Versioning complies with [semantic versioning (semver)](http://semver.org/).
 
 <!-- RETAIN THIS COMMENT. An entry template for a new version is automatically added each time `Invoke-psake version` is called. Fill in changes afterwards. -->
 
+* **v0.1.5** (2018-09-14):
+  * [enhancement] Implements #3. `Get-ClipboardText` now uses a helper type that is compiled on demand for accessing the clipboard via the Windows API, to avoid use of WSH, which may be blocked for security reasons.
+ 
+
 * **v0.1.4** (2018-05-28):
   * [fix] With the exception of WinPSv5+ in STA mode (in wich case the built-in cmdlets are called), `clip.exe` (rather than `[System.Windows.Forms]`) is now used on Windows to avoid intermittent failures in MTA mode.
           Again, tip of the hat to @iricigor for encouraging me to use `clip.exe` consistently.

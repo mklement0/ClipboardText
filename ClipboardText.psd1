@@ -8,7 +8,7 @@ ModuleToProcess = 'ClipboardText.psm1'
 ScriptsToProcess = 'CheckPrereqs.ps1'
 
 # Version number of this module.
-ModuleVersion = '0.1.4'
+ModuleVersion = '0.1.5'
 
 # Supported PSEditions
 # !! This keys is not supported in older PS versions.

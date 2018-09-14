@@ -29,7 +29,6 @@ It is useful in the following **scenarios**:
 * **Use in _universal scripts_.**
   * Universal scripts are scripts that run on both Windows PowerShell and Powershell Core, on all supported platforms, including older versions of Windows PowerShell; in this case, down to version 2.
 
-
 # Installation
 
 ## Installation from the PowerShell Gallery
@@ -63,11 +62,12 @@ See also: [this repo's page in the PowerShell Gallery](https://www.powershellgal
 If you're still using PowerShell v2, manual installation is your only option.
 
 Clone this repository (as a subfolder) into one of the directories listed in the `$env:PSModulePath` variable; e.g., to install the module in the context of the current user, choose the following parent folders:
-  * **Windows**:
-    * Windows PowerShell: `$HOME\Documents\WindowsPowerShell\Modules`
-    * PowerShell Core: `$HOME\Documents\PowerShell\Modules`
-  * **macOs, Linux** (PowerShell Core): 
-    * `$HOME/.local/share/powershell/Modules`
+
+* **Windows**:
+  * Windows PowerShell: `$HOME\Documents\WindowsPowerShell\Modules`
+  * PowerShell Core: `$HOME\Documents\PowerShell\Modules`
+* **macOs, Linux** (PowerShell Core): 
+  * `$HOME/.local/share/powershell/Modules`
 
 As long as you've cloned into one of the directories listed in the `$env:PSModulePath` variable - copying to some of which requires elevation / `sudo` - and as long your `$PSModuleAutoLoadingPreference` is not set (the default) or set to `All`, calling `Set-ClipboardText` or `Get-ClipboardText` should import the module on demand - except in _PowerShell v2_.
 

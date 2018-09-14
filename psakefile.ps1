@@ -83,7 +83,19 @@ task UpdateChangeLog -description "Ensure that the change-log covers the current
 
 }
 
-task Publish -alias pub -depends _assertMasterBranch, _assertNoUntrackedFiles, Test, Version, UpdateChangeLog -description 'Publish to the PowerShell Gallery.' {
+task InspectReadMe -description "Open README.md for synchronous editing; ensure that it contains no placeholders afterward." {
+
+  $readMeFile = $props.Files.ReadMe
+
+  edit-Sync $readMeFile
+
+  # Make sure that all placeholders were actually replaced with real information.
+  assert-HasNoPlaceholders -LiteralPath $readMeFile
+
+}
+
+
+task Publish -alias pub -depends _assertMasterBranch, _assertNoUntrackedFiles, Test, Version, UpdateChangeLog, InspectReadMe -description 'Publish to the PowerShell Gallery.' {
 
   $moduleVersion = get-ThisModuleVersion
 

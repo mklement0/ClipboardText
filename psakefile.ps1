@@ -1,5 +1,8 @@
-# Note: By default, psake behaves as if $ErrorActionPreference = 'Stop' had been set.
-#       I.e., *any* PS errors - even nonterminating ones - abort execution by default.
+# Note: 
+#   * Invoke this file with Invoke-PSake (or an alias such as ips) from the
+#     psake module.
+#   * By default, psake behaves as if $ErrorActionPreference = 'Stop' had been set.
+#     I.e., *any* PS errors - even nonterminating ones - abort execution by default.
 
 properties {
 

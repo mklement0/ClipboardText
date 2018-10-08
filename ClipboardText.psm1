@@ -304,7 +304,9 @@ clipboard, ensuring that output lines are 500 characters wide.
 
         if ($isWin) {
           Write-Verbose "Windows: using clip.exe"
+          Push-Location -LiteralPath "$env:SystemDrive\" # !! Temporary switch to the system drive (a drive guaranteed to be local) to prevent cmd.exe from issuing a warning if a UNC path happens to be the current location - see https://github.com/mklement0/ClipboardText/issues/4
           cmd.exe /c clip.exe '<' $tmpFile  # !! Invoke `cmd` as `cmd.exe` so as to support Pester-based `Mock`s - at least as of v4.3.1, that's a requirement; see https://github.com/pester/Pester/issues/1043
+          Pop-Location
         } elseif ($IsMacOS) {
           Write-Verbose "macOS: using pbcopy"
           sh -c "pbcopy < '$tmpFile'"

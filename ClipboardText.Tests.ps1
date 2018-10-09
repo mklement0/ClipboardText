@@ -11,8 +11,17 @@
         powershell.exe -version 2 -Command "Import-Module '$((Get-Module Pester).Path)'
 #>
 
+# Abort on all unhandled errors.
+$ErrorActionPreference = 'Stop'
+
 # PSv2 compatibility: makes sure that $PSScriptRoot reflects this script's folder.
 if (-not $PSScriptRoot) { $PSScriptRoot = $MyInvocation.MyCommand.Path } 
+
+# Turn on the latest strict mode, so as to make sure that the ScriptsToProcess
+# script that runs the prerequisites-check script dot-sourced also works
+# properly when the caller happens to run with Set-StrictMode -Version Latest
+# in effect.
+Set-StrictMode -Version Latest
 
 # Make sure that the enclosing module is (re)loaded.
 # !! In PSv2, this statement causes Pester to run all tests TWICE (?!)
@@ -172,7 +181,7 @@ Describe v2Tests {
     # !! NO OUTPUT IS PRODUCED - to troubleshoot, run the command interactively from the project folder.
     # !! Notably, *prior installation of v2 support is needed*, and PowerShell seems to quietly ignore `-version 2`
     # !! in its absence, so we have to test from *within* the session.
-    powershell.exe -version 2 -noprofile  -Command "Import-Module '$((Get-Module Pester).Path)'; if (`$PSVersionTable.PSVersion.Major -ne 2) { Throw 'v2 SUPPORT IS NOT INSTALLED.' }; Invoke-Pester"
+    powershell.exe -version 2 -noprofile  -Command "Set-StrictMode -Version Latest; Import-Module '$((Get-Module Pester).Path)'; if (`$PSVersionTable.PSVersion.Major -ne 2) { Throw 'v2 SUPPORT IS NOT INSTALLED.' }; Invoke-Pester"
     $LASTEXITCODE | Should -Be 0
   }
 }

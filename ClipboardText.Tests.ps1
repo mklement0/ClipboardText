@@ -23,7 +23,9 @@ if (-not $PSScriptRoot) { $PSScriptRoot = $MyInvocation.MyCommand.Path }
 # in effect.
 Set-StrictMode -Version Latest
 
-# Make sure that the enclosing module is (re)loaded.
+# Make sure that any loaded module by the same name is first unloaded
+# and then force-load the enclosing module.
+Remove-Module -ErrorAction SilentlyContinue ([IO.Path]::GetFileName($PSScriptRoot))
 # !! In PSv2, this statement causes Pester to run all tests TWICE (?!)
 Import-Module $PSScriptRoot -Force
 
@@ -110,7 +112,7 @@ Describe OutputWidthTest {
   }
   It "Truncates lines that are too wide for the specified width" {
     $obj | Set-ClipboardText -Width 80
-    (Get-ClipboardText)[3] | Should -BeLikeExactly '*...'
+    (Get-ClipboardText)[-2] | Should -Match '(\.\.\.|…)$' # Note: At some point, PS Core started using the '…' (horizontal ellipsis) Unicode char. instead of three periods.
   }
   It "Allows incrementing the width to accommodate wider lines" {
     $obj | Set-ClipboardText -Width 257 # 40 + 1 (space between columns) + 216
@@ -121,9 +123,8 @@ Describe OutputWidthTest {
 # Note: These tests apply to PS *Core* only, because Windows PowerShell doesn't require external utilities for clipboard support.
 Describe MissingExternalUtilityTest {
 
-  # On *Windows PowerShell*, in which case we skip the
-  # tests, because Windows Powershell does't require external utilities for
-  # access to the clipboard.
+  # We skip these tests in *Windows PowerShell*, because Windows Powershell 
+  # does't require external utilities for access to the clipboard.
   # Note: We don't exit right away, because do want to invoke the `It` block
   # with `-Skip` set to $True, so that the results indicated that the test
   # was deliberately skipped.
@@ -134,17 +135,20 @@ Describe MissingExternalUtilityTest {
     # defined with -ModuleName <name>.
     $thisModuleName = (Split-Path -Leaf $PSScriptRoot)
   
-    # Define the platform-appropiate mocks.
-    # Note that the conditional Mocks are necessary, because the Mock function
-    # requires that the targeted command *exist*.
-    if ($env:OS -eq 'Windows_NT') {
-      # !! As of Pester v4.3.1, even though the `Mock` is defined "extension-less"
-      # !! as `cmd` rather than `cmd.exe`, only `cmd.exe` invocations are covered.
-      # !! See https://github.com/pester/Pester/issues/1043
-      Mock cmd { & $env:SystemRoot\System32\cmd.exe /c 'nosuchexe' } -ModuleName $thisModuleName
-    } else {
-      Mock sh  { /bin/sh -c 'nosuchutil' } -ModuleName $thisModuleName
-    }
+    # Define the platform-appropiate mocks for calling the external clipboard
+    # utilities.
+    # Note: Since mocking by full executable path isn't supported, we use
+    #       helper function invoke-Utility.
+
+    # macOS, Linux:
+    Mock invoke-Utility -ParameterFilter { LiteralPath -eq '/bin/sh' } { 
+      /bin/sh -c 'nosuchexe' 
+    } -ModuleName $thisModuleName
+
+    # Windows:
+    Mock invoke-Utility -ParameterFilter { LiteralPath -eq "$env:SystemRoot\System32\cmd.exe" } { 
+      & "$env:SystemRoot\System32\cmd.exe" /c 'nosuchexe' 
+    } -ModuleName $thisModuleName
 
   }
 

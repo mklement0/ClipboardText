@@ -109,13 +109,19 @@ Retrieves text from the clipboard as-is and saves it to file out.txt
       $tempFile = [io.path]::GetTempFileName()
 
       try {
+
+        # Note: For security reasons, we want to make sure it is the actual standard
+        #       shell we're invoking on each platform, so we use its full path.
+        #       Similarly, for clipboard utilities that are standard on a given platform,
+        #       we use their full paths.
+        #       Mocking executables invoked by their full paths isn't directly supported
+        #       in Pester, so we use helper function invoke-Utility, which *can* be mocked.
         
         if ($IsMacOS) {
+
           Write-Verbose "macOS: using pbpaste"
 
-          # Note: For full robustness, using the full path to sh, '/bin/sh' is preferable, but then 
-          #       we couldn't use mock functions to override the command for testing.
-          sh -c "pbpaste > '$tempFile'"
+          invoke-Utility /bin/sh -c "/usr/bin/pbpaste > '$tempFile'"
 
         } else { # $IsLinux
 
@@ -123,7 +129,10 @@ Retrieves text from the clipboard as-is and saves it to file out.txt
 
           # Note: Requires xclip, which is not installed by default on most Linux distros
           #       and works with freedesktop.org-compliant, X11 desktops.
-          sh -c "xclip -selection clipboard -out > '$tempFile'"
+          #       Note: Since xclip is not an in-box utility, we make no assumptions 
+          #             about its specific location and rely on it to be in $env:PATH.
+          invoke-Utility /bin/sh -c "xclip -selection clipboard -out > '$tempFile'"
+          # Check for the specific exit code that indicates that `xclip` wasn't found and provide an installation hint.
           if ($LASTEXITCODE -eq 127) { new-StatementTerminatingError "xclip is not installed; please install it via your platform's package manager; e.g., on Debian-based distros such as Ubuntu: sudo apt install xclip" }
 
         }
@@ -155,11 +164,11 @@ Retrieves text from the clipboard as-is and saves it to file out.txt
   # $null, because that's what the PsWinV5+ Get-Clipboard cmdlet does.
   if (-not $result) {
     # !! To be consistent with Get-Clipboard, we output $null even in the absence of -Raw,
-    # !! even though you could argue that *nothing* should be output (i.e., implicitly, the "null collection", 
+    # !! even though you could argue that *nothing* should be output (i.e., implicitly, the "arry-valued null", 
     # !! [System.Management.Automation.Internal.AutomationNull]::Value)
     # !! so that trying to *enumerate* the result sends nothing through the pipeline.
-    # !! (A similar, but opposite inconsistency is that Get-Content with a zero-byte file outputs the "null collection"
-    # !!  both with and withour -Raw).
+    # !! (A similar, but opposite inconsistency is that Get-Content with a zero-byte file outputs the "array-valued null"
+    # !!  both with and without -Raw).
     $null
   } else {
     $result
@@ -302,23 +311,47 @@ clipboard, ensuring that output lines are 500 characters wide.
       # platform-appropriate clipboard utility.
       try {
 
+        # Note: For security reasons, we want to make sure it is the actual standard
+        #       shell we're invoking on each platform, so we use its full path.
+        #       Similarly, for clipboard utilities that are standard on a given platform,
+        #       we use their full paths.
+        #       Mocking executables invoked by their full paths isn't directly supported
+        #       in Pester, so we use helper function invoke-Utility, which *can* be mocked.
+  
         if ($isWin) {
+
           Write-Verbose "Windows: using clip.exe"
-          Push-Location -LiteralPath "$env:SystemDrive\" # !! Temporary switch to the system drive (a drive guaranteed to be local) to prevent cmd.exe from issuing a warning if a UNC path happens to be the current location - see https://github.com/mklement0/ClipboardText/issues/4
-          cmd.exe /c clip.exe '<' $tmpFile  # !! Invoke `cmd` as `cmd.exe` so as to support Pester-based `Mock`s - at least as of v4.3.1, that's a requirement; see https://github.com/pester/Pester/issues/1043
+
+          # !! Temporary switch to the system drive (a drive guaranteed to be local) so as to 
+          # !! prevent cmd.exe from issuing a warning if a UNC path happens to be the current location
+          # !! - see https://github.com/mklement0/ClipboardText/issues/4
+          Push-Location -LiteralPath $env:SystemRoot
+            invoke-Utility "$env:SystemRoot\System32\cmd.exe" /c "$env:SystemRoot\System32\clip.exe" '<' $tmpFile
           Pop-Location
+
         } elseif ($IsMacOS) {
+
           Write-Verbose "macOS: using pbcopy"
-          sh -c "pbcopy < '$tmpFile'"
+
+          invoke-Utility /bin/sh -c "/usr/bin/pbcopy < '$tmpFile'"
+
         } else { # $IsLinux
+
           Write-Verbose "Linux: using xclip"
-          sh -c "xclip -selection clipboard -in < '$tmpFile' >&-" # !! >&- (i.e., closing stdout) is necessary, because xclip hangs if you try to redirect its - nonexistent output with `-in`, which also happens impliclity via `$null = ...` in the context of Pester tests.
+          # Note: Since xclip is not an in-box utility, we make no assumptions 
+          #       about its specific location and rely on it to be in $env:PATH.
+          # !! >&- (i.e., closing stdout) is necessary, because xclip hangs if you try to redirect its - nonexistent output with `-in`, which also happens impliclity via `$null = ...` in the context of Pester tests.          
+          invoke-Utility /bin/sh -c "xclip -selection clipboard -in < '$tmpFile' >&-"
+
+          # Check for the specific exit code that indicates that `xclip` wasn't found and provide an installation hint.
           if ($LASTEXITCODE -eq 127) { new-StatementTerminatingError "xclip is not installed; please install it via your platform's package manager; e.g., on Debian-based distros such as Ubuntu: sudo apt install xclip" }
+
         }
         
         if ($LASTEXITCODE) { new-StatementTerminatingError "Invoking the platform-specific clipboard utility failed unexpectedly." }
 
       } finally {
+        Pop-Location # Restore the previously current location.
         Remove-Item $tmpFile
       }
 
@@ -352,6 +385,20 @@ function test-WindowsPowerShell {
   # !! Set-StrictMode is set, trying to access it would fail.
   $null, 'Desktop' -contains $PSVersionTable.PSEdition 
 }
+
+# Helper function for invoking an external utility (executable).
+# The raison d'être for this function is so that calls to utilities called 
+# with their *full paths* can be mocked in Pester.
+function invoke-Utility {
+  param(
+    [Parameter(Mandatory=$true)]
+    [string] $LiteralPath,
+    [Parameter(ValueFromRemainingArguments=$true)]
+    $PassThruArgs
+  )
+  & $LiteralPath $PassThruArgs
+}
+
 
 # Adds helper type [net.same2u.util.Clipboard] for clipboard access via the 
 # Windows API.

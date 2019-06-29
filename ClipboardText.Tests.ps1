@@ -172,7 +172,7 @@ Describe MTAtests {
   It "Windows PowerShell: Works in MTA mode" -Skip:(-not $isWinPs -or $PSVersionTable.PSVersion.Major -eq 2) {
     # Recursively invokes the 'StringInputTest' tests.
     # !! This produces NO OUTPUT; to troubleshoot, run the command interactively from the project folder.
-    # !! As of indows PowerShell v5.1.18362.145 on Microsoft Windows 10 Pro (64-bit; Version 1903, OS Build: 18362.175), 
+    # !! As of Windows PowerShell v5.1.18362.145 on Microsoft Windows 10 Pro (64-bit; Version 1903, OS Build: 18362.175), 
     # !! `Get-Command -Name Add-Member, Get-ChildItem` must be executed BEFORE invoking Pester; without it, 
     # !! Pester inexplicably fails to locate these commands during module import and cannot be loaded.
     powershell.exe -noprofile -MTA -Command "if ([threading.thread]::CurrentThread.ApartmentState.ToString() -ne 'MTA') { Throw "Not in MTA mode." }; Get-Command -Name Add-Member, Get-ChildItem; Invoke-Pester -Name StringInputTest -EnableExit"

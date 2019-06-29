@@ -112,7 +112,10 @@ Describe OutputWidthTest {
   }
   It "Truncates lines that are too wide for the specified width" {
     $obj | Set-ClipboardText -Width 80
-    (Get-ClipboardText)[-2] | Should -Match '(\.\.\.|…)$' # Note: At some point, PS Core started using the '…' (horizontal ellipsis) Unicode char. instead of three periods.
+    # Note: [3] - the *4th* line - is the line with the two column values in all editions.
+    #       [-2] to use the penultimate line is NOT reliable, as the editions differ in
+    #       the number of trailing newlines.
+    (Get-ClipboardText)[3] | Should -Match '(\.\.\.|…)$' # Note: At some point, PS Core started using the '…' (horizontal ellipsis) Unicode char. instead of three periods.
   }
   It "Allows incrementing the width to accommodate wider lines" {
     $obj | Set-ClipboardText -Width 257 # 40 + 1 (space between columns) + 216

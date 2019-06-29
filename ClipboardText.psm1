@@ -115,13 +115,13 @@ Retrieves text from the clipboard as-is and saves it to file out.txt
         #       Similarly, for clipboard utilities that are standard on a given platform,
         #       we use their full paths.
         #       Mocking executables invoked by their full paths isn't directly supported
-        #       in Pester, so we use helper function invoke-Utility, which *can* be mocked.
+        #       in Pester, so we use helper function invoke-External, which *can* be mocked.
         
         if ($IsMacOS) {
 
           Write-Verbose "macOS: using pbpaste"
 
-          invoke-Utility /bin/sh -c "/usr/bin/pbpaste > '$tempFile'"
+          invoke-External /bin/sh -c "/usr/bin/pbpaste > '$tempFile'"
 
         } else { # $IsLinux
 
@@ -131,7 +131,7 @@ Retrieves text from the clipboard as-is and saves it to file out.txt
           #       and works with freedesktop.org-compliant, X11 desktops.
           #       Note: Since xclip is not an in-box utility, we make no assumptions 
           #             about its specific location and rely on it to be in $env:PATH.
-          invoke-Utility /bin/sh -c "xclip -selection clipboard -out > '$tempFile'"
+          invoke-External /bin/sh -c "xclip -selection clipboard -out > '$tempFile'"
           # Check for the specific exit code that indicates that `xclip` wasn't found and provide an installation hint.
           if ($LASTEXITCODE -eq 127) { new-StatementTerminatingError "xclip is not installed; please install it via your platform's package manager; e.g., on Debian-based distros such as Ubuntu: sudo apt install xclip" }
 
@@ -316,7 +316,7 @@ clipboard, ensuring that output lines are 500 characters wide.
         #       Similarly, for clipboard utilities that are standard on a given platform,
         #       we use their full paths.
         #       Mocking executables invoked by their full paths isn't directly supported
-        #       in Pester, so we use helper function invoke-Utility, which *can* be mocked.
+        #       in Pester, so we use helper function invoke-External, which *can* be mocked.
   
         if ($isWin) {
 
@@ -326,14 +326,14 @@ clipboard, ensuring that output lines are 500 characters wide.
           # !! prevent cmd.exe from issuing a warning if a UNC path happens to be the current location
           # !! - see https://github.com/mklement0/ClipboardText/issues/4
           Push-Location -LiteralPath $env:SystemRoot
-            invoke-Utility "$env:SystemRoot\System32\cmd.exe" /c "$env:SystemRoot\System32\clip.exe" '<' $tmpFile
+            invoke-External "$env:SystemRoot\System32\cmd.exe" /c "$env:SystemRoot\System32\clip.exe" '<' $tmpFile
           Pop-Location
 
         } elseif ($IsMacOS) {
 
           Write-Verbose "macOS: using pbcopy"
 
-          invoke-Utility /bin/sh -c "/usr/bin/pbcopy < '$tmpFile'"
+          invoke-External /bin/sh -c "/usr/bin/pbcopy < '$tmpFile'"
 
         } else { # $IsLinux
 
@@ -341,7 +341,7 @@ clipboard, ensuring that output lines are 500 characters wide.
           # Note: Since xclip is not an in-box utility, we make no assumptions 
           #       about its specific location and rely on it to be in $env:PATH.
           # !! >&- (i.e., closing stdout) is necessary, because xclip hangs if you try to redirect its - nonexistent output with `-in`, which also happens impliclity via `$null = ...` in the context of Pester tests.          
-          invoke-Utility /bin/sh -c "xclip -selection clipboard -in < '$tmpFile' >&-"
+          invoke-External /bin/sh -c "xclip -selection clipboard -in < '$tmpFile' >&-"
 
           # Check for the specific exit code that indicates that `xclip` wasn't found and provide an installation hint.
           if ($LASTEXITCODE -eq 127) { new-StatementTerminatingError "xclip is not installed; please install it via your platform's package manager; e.g., on Debian-based distros such as Ubuntu: sudo apt install xclip" }
@@ -389,7 +389,7 @@ function test-WindowsPowerShell {
 # Helper function for invoking an external utility (executable).
 # The raison d'être for this function is so that calls to utilities called 
 # with their *full paths* can be mocked in Pester.
-function invoke-Utility {
+function invoke-External {
   param(
     [Parameter(Mandatory=$true)]
     [string] $LiteralPath,

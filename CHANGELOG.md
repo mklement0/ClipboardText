@@ -4,6 +4,9 @@ Versioning complies with [semantic versioning (semver)](http://semver.org/).
 
 <!-- RETAIN THIS COMMENT. An entry template for a new version is automatically added each time `Invoke-psake version` is called. Fill in changes afterwards. -->
 
+* **v0.1.8** (2019-06-29):
+  * [enhancement] For security and robustness, the standard shells and external clipboard programs are now invoked by full path (where known).
+
 * **v0.1.7** (2018-10-08):
   * [fix] for #5: The prerequisites-check script now runs without error even when `Set-StrictMode -Version Latest` is in effect in the caller's scope.
 

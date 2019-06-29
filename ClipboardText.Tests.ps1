@@ -141,15 +141,15 @@ Describe MissingExternalUtilityTest {
     # Define the platform-appropiate mocks for calling the external clipboard
     # utilities.
     # Note: Since mocking by full executable path isn't supported, we use
-    #       helper function invoke-Utility.
+    #       helper function invoke-External.
 
     # macOS, Linux:
-    Mock invoke-Utility -ParameterFilter { LiteralPath -eq '/bin/sh' } { 
+    Mock invoke-External -ParameterFilter { LiteralPath -eq '/bin/sh' } { 
       /bin/sh -c 'nosuchexe' 
     } -ModuleName $thisModuleName
 
     # Windows:
-    Mock invoke-Utility -ParameterFilter { LiteralPath -eq "$env:SystemRoot\System32\cmd.exe" } { 
+    Mock invoke-External -ParameterFilter { LiteralPath -eq "$env:SystemRoot\System32\cmd.exe" } { 
       & "$env:SystemRoot\System32\cmd.exe" /c 'nosuchexe' 
     } -ModuleName $thisModuleName
 

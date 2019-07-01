@@ -144,12 +144,12 @@ Describe MissingExternalUtilityTest {
     #       helper function invoke-External.
 
     # macOS, Linux:
-    Mock invoke-External -ParameterFilter { LiteralPath -eq '/bin/sh' } { 
+    Mock invoke-External -ParameterFilter { $LiteralPath -eq '/bin/sh' } { 
       /bin/sh -c 'nosuchexe' 
     } -ModuleName $thisModuleName
 
     # Windows:
-    Mock invoke-External -ParameterFilter { LiteralPath -eq "$env:SystemRoot\System32\cmd.exe" } { 
+    Mock invoke-External -ParameterFilter { $LiteralPath -eq "$env:SystemRoot\System32\cmd.exe" } { 
       & "$env:SystemRoot\System32\cmd.exe" /c 'nosuchexe' 
     } -ModuleName $thisModuleName
 

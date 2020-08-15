@@ -23,11 +23,13 @@ if (-not $PSScriptRoot) { $PSScriptRoot = $MyInvocation.MyCommand.Path }
 # in effect.
 Set-StrictMode -Version Latest
 
-# Make sure that any loaded module by the same name is first unloaded
-# and then force-load the enclosing module.
-Remove-Module -ErrorAction SilentlyContinue ([IO.Path]::GetFileName($PSScriptRoot))
+# Force-(re)import this module.
+# Target the *.psd1 file explicitly, so the tests can run from versioned subfolders too. Note that the
+# loaded module's ModuleInfo's .Path property will reflect the *.psm1 instead.
+$manifest = (Get-Item $PSScriptRoot/*.psd1)
+Remove-Module -ea Ignore -Force $manifest.BaseName # Note: To be safe, we unload any modules with the same name first (they could be in a different location and end up side by side in memory with this one.)
 # !! In PSv2, this statement causes Pester to run all tests TWICE (?!)
-Import-Module $PSScriptRoot -Force
+Import-Module $manifest -Force -Global # -Global makes sure that when psake runs tester in a child scope, the module is still imported globally.
 
 # Use the platform-appropiate newline.
 $nl = [Environment]::NewLine
@@ -143,6 +145,7 @@ Describe MissingExternalUtilityTest {
     # Note: Since mocking by full executable path isn't supported, we use
     #       helper function invoke-External.
 
+    # ??? TODO: These tests no longer work in Pester 5.x
     # macOS, Linux:
     Mock invoke-External -ParameterFilter { $LiteralPath -eq '/bin/sh' } { 
       /bin/sh -c 'nosuchexe' 

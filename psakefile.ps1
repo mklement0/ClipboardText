@@ -6,8 +6,8 @@
 
 properties {
 
-  $thisModuleName = Split-Path -Leaf $PSScriptRoot
-  # A single hashtable for all script-level properies.
+  $thisModuleName = (Get-Item $PSScriptRoot/*.psd1).BaseName
+  # A single hashtable for all script-level properties.
   $props = @{
 
     # == Properties derived from optional parameters (passed with -parameter @{ ... })
@@ -38,7 +38,7 @@ properties {
 # If no task is passed, list all defined (public) tasks. 
 task default -depends ListTasks
 
-task ListTasks -alias list -description 'List all defined tasks.' {
+task ListTasks -alias l -description 'List all defined tasks.' {
 
   # !! Ideally, we'd just pass through to -docs, but as of psake v4.7.0 on
   # !! PowerShell Core v6.1.0-preview on at least macOS, the formatting is broken.

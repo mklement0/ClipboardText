@@ -147,8 +147,8 @@ Proceed?
 
   # Copy the module to a TEMPORARY FOLDER for publishing, so that 
   # the .git folder and other files not relevant at runtime can be EXCLUDED.
-  # A feature request to have Publish-Module support exclusions directly is
-  # pending - see https://github.com/PowerShell/PowerShellGet/issues/191
+  # A feature request to have Publish-Module support exclusions directly,
+  # via -Exclude, has since been implemented - see https://github.com/PowerShell/PowerShellGet/issues/191   
   # IMPORTANT: For publishing to succeed, the temp. dir.'s name must match the module's.
   $tempPublishDir = Join-Path ([io.Path]::GetTempPath()) "$PID/$($props.ModuleName)"
   $null = New-Item -ItemType Directory -Path $tempPublishDir

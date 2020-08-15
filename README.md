@@ -1,8 +1,5 @@
 [![PowerShell Gallery](https://img.shields.io/powershellgallery/dt/ClipboardText.svg)](https://powershellgallery.com/packages/ClipboardText) [![license](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/mklement0/ClipboardText/blob/master/LICENSE.md)
 
-<!-- START doctoc -->
-<!-- END doctoc -->
-
 # Clipboard text support for PowerShell Core (cross-platform) and Windows PowerShell v2-v4
 
 `ClipboardText` is a **cross-edition, cross-platform PowerShell module** that provides support
@@ -52,7 +49,7 @@ PS> Install-Module ClipboardText -Scope CurrentUser
 #     Right-click on the Windows PowerShell icon and select "Run as Administrator".
 #   On Linux and macOS:
 #     Run `sudo pwsh` from an existing terminal.
-ELEV-PS> Install-Module ClipboardText
+ELEV-PS> Install-Module ClipboardText -Scope AllUsers
 ```
 
 See also: [this repo's page in the PowerShell Gallery](https://www.powershellgallery.com/packages/ClipboardText).
